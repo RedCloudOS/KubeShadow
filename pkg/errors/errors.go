@@ -23,6 +23,12 @@ const (
 
 	// Validation errors
 	ErrValidation ErrorType = "VALIDATION_ERROR"
+
+	// Plugin errors
+	ErrPlugin ErrorType = "PLUGIN_ERROR"
+
+	// Runtime errors
+	ErrRuntime ErrorType = "RUNTIME_ERROR"
 )
 
 // KubeShadowError represents a custom error type
@@ -87,4 +93,20 @@ func IsK8sError(err error) bool {
 func IsValidationError(err error) bool {
 	e, ok := err.(*KubeShadowError)
 	return ok && e.Type == ErrValidation
+}
+
+// IsPluginError checks if the error is a plugin error
+func IsPluginError(err error) bool {
+	if e, ok := err.(*KubeShadowError); ok {
+		return e.Type == ErrPlugin
+	}
+	return false
+}
+
+// IsRuntimeError checks if the error is a runtime error
+func IsRuntimeError(err error) bool {
+	if e, ok := err.(*KubeShadowError); ok {
+		return e.Type == ErrRuntime
+	}
+	return false
 }

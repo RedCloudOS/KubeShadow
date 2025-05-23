@@ -1,85 +1,107 @@
 # KubeShadow
 
-A Kubernetes security testing tool for analyzing and exploiting cluster security misconfigurations.
+KubeShadow is a powerful Kubernetes shadow pod management system designed for testing and development environments. It provides a flexible framework for managing shadow pods with different injection strategies.
 
 ## Features
 
-- **Sidecar Injection**: Inject containers into running pods via API or etcd
-- **Kubelet Exploitation**: Interact with kubelet API endpoints
-- **Reconnaissance**: Gather information about cluster and cloud configuration
-- **RBAC Analysis**: Analyze and exploit RBAC misconfigurations
-- **Cloud Metadata Attacks**: Test for cloud metadata service vulnerabilities
-- **DNS Cache Poisoning**: Analyze and test DNS cache poisoning vectors
-- **Audit Policy Bypass**: Discover and test audit logging weaknesses
-- **Namespace Pivoting**: Identify and exploit namespace isolation issues
+- **Modular Architecture**: Extensible plugin system for custom functionality
+- **Multiple Injection Modes**: Support for API and etcd-based pod management
+- **Configuration Management**: Flexible and validated configuration system
+- **Comprehensive Logging**: Configurable logging with level filtering
+- **Plugin System**: Extend functionality with custom plugins
+- **Metrics Collection**: Built-in metrics plugin for monitoring
+- **Error Handling**: Robust error management and reporting
 
-## Project Structure
+## Installation
 
-```
-KubeShadow/
-├── docs/               # Detailed documentation
-│   ├── sidecarinject.md   # Sidecar injection module
-│   ├── kubeletjack.md     # Kubelet exploitation module
-│   ├── recon.md          # Reconnaissance module
-│   ├── rbac.md           # RBAC analysis module
-│   ├── cloudattacks.md   # Cloud metadata attacks
-│   ├── dns.md           # DNS cache poisoning
-│   ├── audit.md         # Audit policy bypass
-│   └── namespace.md     # Namespace pivoting
-├── modules/           # Command modules
-├── pkg/              # Core packages
-└── resources/        # Configs and templates
-    ├── configs/      # Configuration files
-    └── templates/    # JSON/YAML templates
+```bash
+go get github.com/ashifly/KubeShadow
 ```
 
 ## Quick Start
 
-1. Clone the repository
-2. Build the tool:
-   ```bash
-   go build -o kubeshadow
-   ```
-3. Run a module:
-   ```bash
-   ./kubeshadow <module-name> [flags]
-   ```
+1. Create a configuration file:
+```yaml
+log_level: info
+modules:
+  sidecar:
+    enabled: true
+    config:
+      image: test-image:latest
+```
 
-## Available Modules
+2. Run KubeShadow:
+```bash
+kubeshadow --config config.yaml
+```
 
-- [`sidecarinject`](docs/sidecarinject.md): Inject sidecar containers into pods
-- [`kubeletjack`](docs/kubeletjack.md): Exploit kubelet API endpoints
-- [`recon`](docs/recon.md): Perform cluster reconnaissance
-- [`rbac`](docs/rbac.md): Analyze RBAC permissions
-- [`cloud-elevator`](docs/cloudattacks.md): Test cloud metadata service access
-- [`dns-poison`](docs/dns.md): Test DNS cache poisoning vulnerabilities
-- [`audit-bypass`](docs/audit.md): Analyze audit policy weaknesses
-- [`namespace-pivot`](docs/namespace.md): Test namespace isolation
-- [`metadata-hijack`](docs/cloudattacks.md): Exploit cloud metadata services
+## Plugin System
 
-## Requirements
+KubeShadow provides a powerful plugin system that allows you to extend its functionality. Plugins can be used for:
 
-- Go 1.19 or higher
-- Access to a Kubernetes cluster
-- Appropriate permissions based on module
-- For cloud-related modules: Access to cloud provider environment
+- Metrics collection
+- Custom monitoring
+- Additional injection strategies
+- Resource management
+- Custom validations
 
-## Documentation
+### Creating a Plugin
 
-Each module has its own detailed documentation:
-- [Sidecar Injection Guide](docs/sidecarinject.md)
-- [Kubelet Exploitation Guide](docs/kubeletjack.md)
-- [Reconnaissance Guide](docs/recon.md)
-- [RBAC Analysis Guide](docs/rbac.md)
-- [Cloud Attack Guide](docs/cloudattacks.md)
-- [DNS Cache Poisoning Guide](docs/dns.md)
-- [Audit Policy Bypass Guide](docs/audit.md)
-- [Namespace Pivoting Guide](docs/namespace.md)
+1. Implement the `Plugin` interface:
+```go
+type Plugin interface {
+    Name() string
+    Version() string
+    Initialize(ctx context.Context) error
+    Execute(ctx context.Context) error
+    Cleanup(ctx context.Context) error
+    GetStatus() *PluginStatus
+}
+```
+
+2. Register your plugin:
+```go
+registry := NewPluginRegistry()
+plugin := NewMyPlugin()
+registry.RegisterPlugin(plugin)
+```
+
+### Available Plugins
+
+- **Metrics Plugin**: Collects and reports system metrics
+- **Sidecar Plugin**: Manages shadow pod injection
+- More plugins coming soon!
+
+## Configuration
+
+KubeShadow uses a YAML configuration file with the following structure:
+
+```yaml
+log_level: info
+modules:
+  sidecar:
+    enabled: true
+    config:
+      image: test-image:latest
+  metrics:
+    enabled: true
+    config:
+      interval: 30s
+```
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Disclaimer
+## Roadmap
 
-This tool is for educational and security testing purposes only. Use responsibly and only on systems you have permission to test.
+- [ ] Additional plugin types
+- [ ] Enhanced monitoring
+- [ ] Advanced security features
+- [ ] Performance optimizations
+- [ ] More documentation
+- [ ] Community examples
