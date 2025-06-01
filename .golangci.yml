@@ -1,13 +1,10 @@
-version: "1"
+version: 2
 
 linters:
   enable:
-    - gofmt
-    - golint
     - govet
     - errcheck
     - staticcheck
-    - gosimple
     - ineffassign
     - misspell
     - unconvert
@@ -15,7 +12,6 @@ linters:
     - gocyclo
     - dupl
     - goconst
-    - goimports
 
 run:
   deadline: 5m
@@ -45,7 +41,6 @@ linters-settings:
       - G402 # TLS InsecureSkipVerify set true
 
 output:
-  formats:
-    - colored-line-number
+  format: colored-line-number
   print-issued-lines: true
   print-linter-name: true 

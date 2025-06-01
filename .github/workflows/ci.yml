@@ -25,8 +25,7 @@ jobs:
       uses: golangci/golangci-lint-action@v2
       with:
         version: v2.0.0
-        args: --verbose
-        skip-cache: false
+        args: --verbose --format=colored-line-number
         skip-pkg-cache: false
         skip-build-cache: false
 
