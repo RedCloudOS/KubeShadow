@@ -39,9 +39,3 @@ linters-settings:
       - G104 # Unhandled errors
       - G107 # URL provided to HTTP request as taint input
       - G402 # TLS InsecureSkipVerify set true
-
-output:
-  formats:
-    - colored-line-number  # updated from deprecated 'format'
-  print-issued-lines: true
-  print-linter-name: true

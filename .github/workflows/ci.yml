@@ -11,56 +11,47 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
 
-    - name: Install dependencies
-      run: go mod download
+      - name: Install dependencies
+        run: go mod download
 
-    - name: Check for Go files
-      id: check_go_files
-      run: |
-        if ! find . -name '*.go' | grep -q .; then
-          echo "No Go files found, skipping lint."
-          echo "skip_lint=true" >> $GITHUB_OUTPUT
-        fi
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.57.2
+          args: --out-format=github-actions --verbose --timeout=5m ./ ./cmd ./pkg ./modules
+          skip-pkg-cache: false
+          skip-build-cache: false
 
-    - name: Run linter
-      if: steps.check_go_files.outputs.skip_lint != 'true'
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: v1.57.2
-        args: --out-format=github-actions --verbose
-        skip-pkg-cache: false
-        skip-build-cache: false
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
-
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.txt
-        fail_ci_if_error: true
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.txt
+          fail_ci_if_error: true
 
   build:
     name: Build
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
 
-    - name: Build
-      run: go build -v ./...
+      - name: Build
+        run: go build -v ./...
 
-    - name: Build Docker image
-      run: docker build -t kubeshadow .
+      - name: Build Docker image
+        run: docker build -t kubeshadow .
