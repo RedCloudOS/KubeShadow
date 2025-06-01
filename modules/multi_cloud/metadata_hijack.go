@@ -1,4 +1,4 @@
-package modules
+package multi_cloud
 
 import (
 	"fmt"
