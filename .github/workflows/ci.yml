@@ -22,9 +22,9 @@ jobs:
       run: go mod download
 
     - name: Run linter
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v2
       with:
-        version: latest
+        version: v1.64.8
 
     - name: Run tests
       run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
