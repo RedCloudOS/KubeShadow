@@ -43,4 +43,4 @@ linters-settings:
 output:
   format: colored-line-number
   print-issued-lines: true
-  print-linter-name: true 
+  print-linter-name: true

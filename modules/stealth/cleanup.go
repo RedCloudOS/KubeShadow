@@ -112,15 +112,18 @@ func RemoveInjectedPods(podName, namespace string) error {
 
 // WipeContainerLogs attempts to clean logs for a container on a node via SSH
 func WipeContainerLogs(nodeName string) error {
+	// Validate node name
 	if !isValidNodeName(nodeName) {
 		return fmt.Errorf("invalid node name: %s", nodeName)
 	}
 
+	// Validate and sanitize log file path
 	logFilePath := filepath.Clean("/var/log/containers")
 	if !strings.HasPrefix(logFilePath, "/var/log/") {
 		return fmt.Errorf("invalid log path: %s", logFilePath)
 	}
 
+	// Use secure command execution
 	cmd := exec.Command("truncate", "-s", "0", logFilePath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to truncate logs: %v\nOutput: %s", err, output)

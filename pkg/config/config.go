@@ -23,13 +23,20 @@ type Config struct {
 
 // LoadConfig loads configuration from file
 func LoadConfig(configPath string) (*Config, error) {
+	// Validate config path
 	if !filepath.IsAbs(configPath) {
 		return nil, fmt.Errorf("config path must be absolute: %s", configPath)
 	}
 
+	// Ensure file exists and is readable
+	if _, err := os.Stat(configPath); err != nil {
+		return nil, fmt.Errorf("failed to access config file: %v", err)
+	}
+
+	// Read config file
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %s: %v", configPath, err)
+		return nil, fmt.Errorf("failed to read config file: %v", err)
 	}
 
 	var config Config
@@ -45,18 +52,27 @@ func LoadConfig(configPath string) (*Config, error) {
 }
 
 // SaveConfig saves configuration to file
-func SaveConfig(config *Config, path string) error {
-	if !filepath.IsAbs(path) {
-		return fmt.Errorf("config path must be absolute: %s", path)
+func SaveConfig(config *Config, configPath string) error {
+	// Validate config path
+	if !filepath.IsAbs(configPath) {
+		return fmt.Errorf("config path must be absolute: %s", configPath)
 	}
 
+	// Ensure directory exists
+	dir := filepath.Dir(configPath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create config directory: %v", err)
+	}
+
+	// Marshal config
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %v", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return fmt.Errorf("failed to write config file %s: %v", path, err)
+	// Write config file with secure permissions
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config file: %v", err)
 	}
 
 	return nil

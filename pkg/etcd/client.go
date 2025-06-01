@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -19,14 +20,17 @@ type Client struct {
 
 // WatchResponse represents a watch event response
 type WatchResponse struct {
-	Type  clientv3.EventType
+	Type  int32 // Using int32 for event type
 	Key   string
 	Value string
 }
 
 // CreateEtcdClient creates a new etcd client with TLS configuration
 func CreateEtcdClient(endpoint, certFile, keyFile, caFile string) (*clientv3.Client, error) {
-	var tlsConfig *tls.Config
+	// Validate file paths
+	if !filepath.IsAbs(certFile) || !filepath.IsAbs(keyFile) || !filepath.IsAbs(caFile) {
+		return nil, fmt.Errorf("all certificate paths must be absolute")
+	}
 
 	// Load client cert
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -45,14 +49,20 @@ func CreateEtcdClient(endpoint, certFile, keyFile, caFile string) (*clientv3.Cli
 		return nil, fmt.Errorf("failed to parse CA cert")
 	}
 
-	// Create TLS config
-	tlsConfig = &tls.Config{
+	// Create TLS config with secure settings
+	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
 		MinVersion:   tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		},
 	}
 
-	// Create etcd client
+	// Create etcd client with secure settings
 	config := clientv3.Config{
 		Endpoints:   []string{endpoint},
 		TLS:         tlsConfig,
@@ -114,7 +124,7 @@ func (c *Client) Watch(ctx context.Context, key string) (<-chan WatchResponse, e
 		for resp := range watchChan {
 			for _, event := range resp.Events {
 				c.watchChan <- WatchResponse{
-					Type:  event.Type,
+					Type:  int32(event.Type),
 					Key:   string(event.Kv.Key),
 					Value: string(event.Kv.Value),
 				}
