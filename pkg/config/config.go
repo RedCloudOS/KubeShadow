@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,11 +25,38 @@ type GlobalConfig struct {
 	Debug      bool   `yaml:"debug"`
 }
 
+// validatePath ensures the path is safe to use
+func validatePath(path string) error {
+	// Ensure path is absolute
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("path must be absolute: %s", path)
+	}
+
+	// Ensure path is within allowed directories
+	allowedDirs := []string{
+		os.Getenv("HOME"),
+		"/etc/kubeshadow",
+		"/var/lib/kubeshadow",
+	}
+
+	path = filepath.Clean(path)
+	for _, dir := range allowedDirs {
+		if dir == "" {
+			continue
+		}
+		if strings.HasPrefix(path, dir) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("path not in allowed directories: %s", path)
+}
+
 // LoadConfig loads configuration from file
 func LoadConfig(configPath string) (*Config, error) {
 	// Validate config path
-	if !filepath.IsAbs(configPath) {
-		return nil, fmt.Errorf("config path must be absolute: %s", configPath)
+	if err := validatePath(configPath); err != nil {
+		return nil, err
 	}
 
 	// Ensure file exists and is readable
@@ -44,7 +72,11 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	config := &Config{
 		ModuleConfig: make(map[string]interface{}),
-		GlobalConfig: GlobalConfig{},
+		GlobalConfig: GlobalConfig{
+			KubeConfig: "",
+			Stealth:    false,
+			Debug:      false,
+		},
 	}
 
 	if err := yaml.Unmarshal(data, config); err != nil {
@@ -61,8 +93,8 @@ func LoadConfig(configPath string) (*Config, error) {
 // SaveConfig saves configuration to file
 func SaveConfig(config *Config, configPath string) error {
 	// Validate config path
-	if !filepath.IsAbs(configPath) {
-		return fmt.Errorf("config path must be absolute: %s", configPath)
+	if err := validatePath(configPath); err != nil {
+		return err
 	}
 
 	// Ensure directory exists
@@ -85,6 +117,7 @@ func SaveConfig(config *Config, configPath string) error {
 	return nil
 }
 
+// Validate validates the configuration
 func (c *Config) Validate() error {
 	if c.GlobalConfig.KubeConfig == "" {
 		return fmt.Errorf("kubernetes configuration is required")

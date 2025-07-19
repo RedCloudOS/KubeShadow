@@ -3,15 +3,133 @@ package recon
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"kubeshadow/pkg/errors"
+
 	authv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
+
+// ReconClient handles Kubernetes reconnaissance operations
+type ReconClient struct {
+	clientset *kubernetes.Clientset
+}
+
+// NewReconClient creates a new ReconClient instance
+func NewReconClient() (*ReconClient, error) {
+	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, "failed to build kubeconfig", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, "failed to create kubernetes client", err)
+	}
+
+	return &ReconClient{clientset: clientset}, nil
+}
+
+// ListPods lists all pods in the specified namespace
+func (c *ReconClient) ListPods(ctx context.Context, namespace string) ([]corev1.Pod, error) {
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to list pods in namespace %s", namespace), err)
+	}
+	return pods.Items, nil
+}
+
+// ListServices lists all services in the specified namespace
+func (c *ReconClient) ListServices(ctx context.Context, namespace string) ([]corev1.Service, error) {
+	services, err := c.clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to list services in namespace %s", namespace), err)
+	}
+	return services.Items, nil
+}
+
+// ListSecrets lists all secrets in the specified namespace
+func (c *ReconClient) ListSecrets(ctx context.Context, namespace string) ([]corev1.Secret, error) {
+	secrets, err := c.clientset.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to list secrets in namespace %s", namespace), err)
+	}
+	return secrets.Items, nil
+}
+
+// ListConfigMaps lists all configmaps in the specified namespace
+func (c *ReconClient) ListConfigMaps(ctx context.Context, namespace string) ([]corev1.ConfigMap, error) {
+	configmaps, err := c.clientset.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to list configmaps in namespace %s", namespace), err)
+	}
+	return configmaps.Items, nil
+}
+
+// ListNamespaces lists all namespaces
+func (c *ReconClient) ListNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+	namespaces, err := c.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, "failed to list namespaces", err)
+	}
+	return namespaces.Items, nil
+}
+
+// GetPodLogs retrieves logs for a specific pod
+func (c *ReconClient) GetPodLogs(ctx context.Context, namespace, podName string) (string, error) {
+	req := c.clientset.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{})
+	logs, err := req.Do(ctx).Raw()
+	if err != nil {
+		return "", errors.New(errors.ErrK8s, fmt.Sprintf("failed to get logs for pod %s", podName), err)
+	}
+	return string(logs), nil
+}
+
+// GetPodEvents retrieves events for a specific pod
+func (c *ReconClient) GetPodEvents(ctx context.Context, namespace, podName string) ([]corev1.Event, error) {
+	events, err := c.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s", podName),
+	})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to get events for pod %s", podName), err)
+	}
+	return events.Items, nil
+}
+
+// GetNodeInfo retrieves information about a specific node
+func (c *ReconClient) GetNodeInfo(ctx context.Context, nodeName string) (*corev1.Node, error) {
+	node, err := c.clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to get node %s", nodeName), err)
+	}
+	return node, nil
+}
+
+// GetPodInfo retrieves detailed information about a specific pod
+func (c *ReconClient) GetPodInfo(ctx context.Context, namespace, podName string) (*corev1.Pod, error) {
+	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to get pod %s", podName), err)
+	}
+	return pod, nil
+}
+
+// GetServiceInfo retrieves detailed information about a specific service
+func (c *ReconClient) GetServiceInfo(ctx context.Context, namespace, serviceName string) (*corev1.Service, error) {
+	service, err := c.clientset.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+	if err != nil {
+		return nil, errors.New(errors.ErrK8s, fmt.Sprintf("failed to get service %s", serviceName), err)
+	}
+	return service, nil
+}
 
 // checkCoreDNSConfig looks for potential DNS cache poisoning vectors
 func checkCoreDNSConfig(clientset *kubernetes.Clientset, ctx context.Context) {
