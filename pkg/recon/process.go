@@ -539,7 +539,7 @@ func getResourceLimits(pid int) (ProcessLimits, error) {
 		}
 
 		switch fields[0] {
-		case "Max", "open", "files":
+		case "Max", "file", "descriptors":
 			limits.MaxFileDescriptors = value
 		case "Max", "processes":
 			limits.MaxProcesses = value

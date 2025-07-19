@@ -25,7 +25,7 @@ type ContainerInfo struct {
 	NetworkMode string
 	IPAddress   string
 	Ports       []PortInfo
-	Mounts      []MountInfo
+	Mounts      []ContainerMountInfo
 	Labels      map[string]string
 	Env         []string
 }
@@ -37,8 +37,8 @@ type PortInfo struct {
 	Protocol      string
 }
 
-// MountInfo represents container mount information
-type MountInfo struct {
+// Rename type MountInfo to ContainerMountInfo
+type ContainerMountInfo struct {
 	Source      string
 	Destination string
 	Type        string
@@ -194,9 +194,9 @@ func getDockerContainers(ctx context.Context) ([]*ContainerInfo, error) {
 		}
 
 		// Parse mounts
-		var mounts []MountInfo
+		var mounts []ContainerMountInfo
 		for _, m := range details.Mounts {
-			mounts = append(mounts, MountInfo{
+			mounts = append(mounts, ContainerMountInfo{
 				Source:      m.Source,
 				Destination: m.Destination,
 				Type:        m.Type,
@@ -349,9 +349,9 @@ func getContainerdContainers(ctx context.Context) ([]*ContainerInfo, error) {
 		}
 
 		// Parse mounts
-		var mounts []MountInfo
+		var mounts []ContainerMountInfo
 		for _, m := range details.Mounts {
-			mounts = append(mounts, MountInfo{
+			mounts = append(mounts, ContainerMountInfo{
 				Source:      m.Source,
 				Destination: m.Destination,
 				Type:        m.Type,
@@ -504,9 +504,9 @@ func getCRIOContainers(ctx context.Context) ([]*ContainerInfo, error) {
 		}
 
 		// Parse mounts
-		var mounts []MountInfo
+		var mounts []ContainerMountInfo
 		for _, m := range details.Mounts {
-			mounts = append(mounts, MountInfo{
+			mounts = append(mounts, ContainerMountInfo{
 				Source:      m.Source,
 				Destination: m.Destination,
 				Type:        m.Type,

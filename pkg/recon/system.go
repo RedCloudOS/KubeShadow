@@ -140,7 +140,7 @@ func GetSystemInfo(ctx context.Context) (SystemInfo, error) {
 	info.UserInfo = userInfo
 
 	// Get environment variables
-	env, err := getEnvironment()
+	env, err := getSystemEnvironment()
 	if err != nil {
 		return info, fmt.Errorf("failed to get environment variables: %v", err)
 	}
@@ -601,7 +601,7 @@ func getUserInfo() ([]UserInfo, error) {
 	return users, nil
 }
 
-func getEnvironment() ([]string, error) {
+func getSystemEnvironment() ([]string, error) {
 	return os.Environ(), nil
 }
 

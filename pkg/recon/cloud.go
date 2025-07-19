@@ -77,9 +77,7 @@ func checkDNSResolution() {
 
 // CloudMetadataRecon performs cloud metadata reconnaissance
 func CloudMetadataRecon(ctx context.Context, stealth bool) error {
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
+	// Removed unused client variable
 
 	// Check DNS resolution first
 	if !stealth {
@@ -88,19 +86,22 @@ func CloudMetadataRecon(ctx context.Context, stealth bool) error {
 
 	// Try AWS
 	fmt.Println("\n[+] Checking AWS metadata...")
-	if err := checkAWS(ctx); err != nil {
+	_, err := checkAWS(ctx)
+	if err != nil {
 		fmt.Printf("    - Not running on AWS or metadata endpoint blocked\n")
 	}
 
 	// Try GCP
 	fmt.Println("\n[+] Checking GCP metadata...")
-	if err := checkGCP(ctx); err != nil {
+	_, err = checkGCP(ctx)
+	if err != nil {
 		fmt.Printf("    - Not running on GCP or metadata endpoint blocked\n")
 	}
 
 	// Try Azure
 	fmt.Println("\n[+] Checking Azure metadata...")
-	if err := checkAzure(ctx); err != nil {
+	_, err = checkAzure(ctx)
+	if err != nil {
 		fmt.Printf("    - Not running on Azure or metadata endpoint blocked\n")
 	}
 

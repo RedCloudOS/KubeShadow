@@ -26,12 +26,12 @@ type VolumeInfo struct {
 	Used        int64
 	Available   int64
 	Usage       float64
-	Mounts      []MountInfo
+	Mounts      []VolumeMountInfo
 	Permissions string
 }
 
-// MountInfo represents volume mount information
-type MountInfo struct {
+// VolumeMountInfo represents volume mount information
+type VolumeMountInfo struct {
 	Source      string
 	Destination string
 	Type        string
@@ -396,8 +396,8 @@ func getVolumePermissions(mountpoint string) (string, error) {
 	return info.Mode().String(), nil
 }
 
-func getVolumeMounts(mountpoint string) ([]MountInfo, error) {
-	var mounts []MountInfo
+func getVolumeMounts(mountpoint string) ([]VolumeMountInfo, error) {
+	var mounts []VolumeMountInfo
 
 	// Read /proc/mounts
 	content, err := os.ReadFile("/proc/mounts")
@@ -414,7 +414,7 @@ func getVolumeMounts(mountpoint string) ([]MountInfo, error) {
 
 		// Check if this mount is related to the volume
 		if strings.HasPrefix(fields[1], mountpoint) {
-			mounts = append(mounts, MountInfo{
+			mounts = append(mounts, VolumeMountInfo{
 				Source:      fields[0],
 				Destination: fields[1],
 				Type:        fields[2],

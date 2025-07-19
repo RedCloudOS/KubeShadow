@@ -135,7 +135,7 @@ func GetNetworkInfo(ctx context.Context) (*NetworkInfo, error) {
 	info := &NetworkInfo{}
 
 	// Get hostname
-	hostname, err := getHostname()
+	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %v", err)
 	}
@@ -191,14 +191,6 @@ func GetNetworkInfo(ctx context.Context) (*NetworkInfo, error) {
 	info.FirewallRules = firewallRules
 
 	return info, nil
-}
-
-func getHostname() (string, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("failed to get hostname: %v", err)
-	}
-	return hostname, nil
 }
 
 func getIPAddresses() ([]IPAddress, error) {
@@ -335,19 +327,6 @@ func getTCPPorts() ([]Port, error) {
 			continue
 		}
 
-		// Parse remote address and port
-		remoteAddr := fields[2]
-		remotePort, err := strconv.ParseInt(strings.Split(remoteAddr, ":")[1], 16, 32)
-		if err != nil {
-			continue
-		}
-
-		// Parse state
-		state, err := strconv.ParseInt(fields[3], 16, 32)
-		if err != nil {
-			continue
-		}
-
 		// Get process information
 		process := ""
 		user := ""
@@ -397,13 +376,6 @@ func getUDPPorts() ([]Port, error) {
 		// Parse local address and port
 		localAddr := fields[1]
 		localPort, err := strconv.ParseInt(strings.Split(localAddr, ":")[1], 16, 32)
-		if err != nil {
-			continue
-		}
-
-		// Parse remote address and port
-		remoteAddr := fields[2]
-		remotePort, err := strconv.ParseInt(strings.Split(remoteAddr, ":")[1], 16, 32)
 		if err != nil {
 			continue
 		}
