@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -205,34 +206,62 @@ func getHostname() (string, error) {
 func getOSInfo() (OSInfo, error) {
 	var info OSInfo
 
-	// Read /etc/os-release
-	content, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return info, fmt.Errorf("failed to read /etc/os-release: %v", err)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		fields := strings.SplitN(line, "=", 2)
-		if len(fields) != 2 {
-			continue
+	// Try to detect OS using runtime.GOOS
+	switch runtime.GOOS {
+	case "darwin":
+		info.Name = "macOS"
+		// Try to get macOS version
+		cmd := exec.Command("sw_vers", "-productVersion")
+		if output, err := cmd.Output(); err == nil {
+			info.Version = strings.TrimSpace(string(output))
 		}
+		info.Distribution = "darwin"
+	case "linux":
+		// Read /etc/os-release
+		content, err := os.ReadFile("/etc/os-release")
+		if err != nil {
+			// Fallback to /etc/issue
+			if issueContent, err := os.ReadFile("/etc/issue"); err == nil {
+				info.Name = strings.TrimSpace(string(issueContent))
+			} else {
+				info.Name = "Linux"
+			}
+		} else {
+			lines := strings.Split(string(content), "\n")
+			for _, line := range lines {
+				fields := strings.SplitN(line, "=", 2)
+				if len(fields) != 2 {
+					continue
+				}
 
-		key := strings.TrimSpace(fields[0])
-		value := strings.Trim(strings.TrimSpace(fields[1]), "\"")
+				key := strings.TrimSpace(fields[0])
+				value := strings.Trim(strings.TrimSpace(fields[1]), "\"")
 
-		switch key {
-		case "NAME":
-			info.Name = value
-		case "VERSION":
-			info.Version = value
-		case "ID":
-			info.Distribution = value
-		case "VERSION_ID":
-			info.Release = value
-		case "VERSION_CODENAME":
-			info.CodeName = value
+				switch key {
+				case "NAME":
+					info.Name = value
+				case "VERSION":
+					info.Version = value
+				case "ID":
+					info.Distribution = value
+				case "VERSION_ID":
+					info.Release = value
+				case "VERSION_CODENAME":
+					info.CodeName = value
+				}
+			}
 		}
+	case "windows":
+		info.Name = "Windows"
+		// Try to get Windows version
+		cmd := exec.Command("cmd", "/c", "ver")
+		if output, err := cmd.Output(); err == nil {
+			info.Version = strings.TrimSpace(string(output))
+		}
+		info.Distribution = "windows"
+	default:
+		info.Name = runtime.GOOS
+		info.Distribution = runtime.GOOS
 	}
 
 	return info, nil
@@ -241,53 +270,87 @@ func getOSInfo() (OSInfo, error) {
 func getCPUInfo() (CPUInfo, error) {
 	var info CPUInfo
 
-	// Read /proc/cpuinfo
-	content, err := os.ReadFile("/proc/cpuinfo")
-	if err != nil {
-		return info, fmt.Errorf("failed to read /proc/cpuinfo: %v", err)
-	}
+	// Set default values
+	info.Cores = runtime.NumCPU()
+	info.Threads = runtime.NumCPU()
 
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		fields := strings.SplitN(line, ":", 2)
-		if len(fields) != 2 {
-			continue
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/cpuinfo
+		content, err := os.ReadFile("/proc/cpuinfo")
+		if err != nil {
+			return info, fmt.Errorf("failed to read /proc/cpuinfo: %v", err)
 		}
 
-		key := strings.TrimSpace(fields[0])
-		value := strings.TrimSpace(fields[1])
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			fields := strings.SplitN(line, ":", 2)
+			if len(fields) != 2 {
+				continue
+			}
 
-		switch key {
-		case "model name":
-			info.Model = value
-		case "cpu cores":
-			cores, err := strconv.Atoi(value)
-			if err != nil {
-				continue
+			key := strings.TrimSpace(fields[0])
+			value := strings.TrimSpace(fields[1])
+
+			switch key {
+			case "model name":
+				info.Model = value
+			case "cpu cores":
+				cores, err := strconv.Atoi(value)
+				if err != nil {
+					continue
+				}
+				info.Cores = cores
+			case "siblings":
+				threads, err := strconv.Atoi(value)
+				if err != nil {
+					continue
+				}
+				info.Threads = threads
+			case "cpu MHz":
+				freq, err := strconv.ParseFloat(value, 64)
+				if err != nil {
+					continue
+				}
+				info.Frequency = freq
+			case "cache size":
+				cache := strings.Fields(value)[0]
+				size, err := strconv.ParseInt(cache, 10, 64)
+				if err != nil {
+					continue
+				}
+				info.Cache = size
+			case "flags":
+				info.Flags = strings.Fields(value)
 			}
-			info.Cores = cores
-		case "siblings":
-			threads, err := strconv.Atoi(value)
-			if err != nil {
-				continue
-			}
-			info.Threads = threads
-		case "cpu MHz":
-			freq, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				continue
-			}
-			info.Frequency = freq
-		case "cache size":
-			cache := strings.Fields(value)[0]
-			size, err := strconv.ParseInt(cache, 10, 64)
-			if err != nil {
-				continue
-			}
-			info.Cache = size
-		case "flags":
-			info.Flags = strings.Fields(value)
 		}
+	case "darwin":
+		// macOS - try to get CPU info using sysctl
+		cmd := exec.Command("sysctl", "-n", "machdep.cpu.brand_string")
+		if output, err := cmd.Output(); err == nil {
+			info.Model = strings.TrimSpace(string(output))
+		}
+		
+		cmd = exec.Command("sysctl", "-n", "hw.ncpu")
+		if output, err := cmd.Output(); err == nil {
+			if cores, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil {
+				info.Cores = cores
+			}
+		}
+		
+		cmd = exec.Command("sysctl", "-n", "hw.cpufrequency")
+		if output, err := cmd.Output(); err == nil {
+			if freq, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64); err == nil {
+				info.Frequency = freq / 1000000 // Convert to MHz
+			}
+		}
+	case "windows":
+		// Windows - basic info
+		info.Model = "Windows CPU"
+		info.Cores = runtime.NumCPU()
+	default:
+		info.Model = "Unknown CPU"
+		info.Cores = runtime.NumCPU()
 	}
 
 	// Get CPU temperature
@@ -310,114 +373,215 @@ func getCPUInfo() (CPUInfo, error) {
 }
 
 func getCPUTemperature() (float64, error) {
-	// Read /sys/class/thermal/thermal_zone0/temp
-	content, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
-	if err != nil {
-		return 0, fmt.Errorf("failed to read CPU temperature: %v", err)
-	}
+	switch runtime.GOOS {
+	case "linux":
+		// Read /sys/class/thermal/thermal_zone0/temp
+		content, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
+		if err != nil {
+			return 0, fmt.Errorf("failed to read CPU temperature: %v", err)
+		}
 
-	temp, err := strconv.ParseFloat(strings.TrimSpace(string(content)), 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse CPU temperature: %v", err)
-	}
+		temp, err := strconv.ParseFloat(strings.TrimSpace(string(content)), 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse CPU temperature: %v", err)
+		}
 
-	return temp / 1000.0, nil
+		return temp / 1000.0, nil
+	case "darwin":
+		// macOS - CPU temperature not easily accessible without sudo
+		// Return 0 to indicate not available rather than error
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("CPU temperature not supported on %s", runtime.GOOS)
+	}
 }
 
 func getCPUUsage() (float64, error) {
-	// Read /proc/stat
-	content, err := os.ReadFile("/proc/stat")
-	if err != nil {
-		return 0, fmt.Errorf("failed to read /proc/stat: %v", err)
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/stat
+		content, err := os.ReadFile("/proc/stat")
+		if err != nil {
+			return 0, fmt.Errorf("failed to read /proc/stat: %v", err)
+		}
+
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			if !strings.HasPrefix(line, "cpu ") {
+				continue
+			}
+
+			fields := strings.Fields(line)
+			if len(fields) < 8 {
+				return 0, fmt.Errorf("invalid CPU stats format")
+			}
+
+			// Parse CPU times
+			user, err := strconv.ParseInt(fields[1], 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse user time: %v", err)
+			}
+
+			nice, err := strconv.ParseInt(fields[2], 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse nice time: %v", err)
+			}
+
+			system, err := strconv.ParseInt(fields[3], 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse system time: %v", err)
+			}
+
+			idle, err := strconv.ParseInt(fields[4], 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse idle time: %v", err)
+			}
+
+			// Calculate CPU usage
+			total := user + nice + system + idle
+			used := total - idle
+			usage := float64(used) / float64(total) * 100.0
+
+			return usage, nil
+		}
+
+		return 0, fmt.Errorf("CPU stats not found")
+	case "darwin":
+		// macOS - use top command
+		cmd := exec.Command("top", "-l", "1", "-n", "0")
+		output, err := cmd.Output()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get CPU usage on macOS: %v", err)
+		}
+
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "CPU usage:") {
+				fields := strings.Fields(line)
+				for i, field := range fields {
+					if field == "CPU" && i+2 < len(fields) {
+						usageStr := strings.TrimSuffix(fields[i+2], "%")
+						usage, err := strconv.ParseFloat(usageStr, 64)
+						if err == nil {
+							return usage, nil
+						}
+					}
+				}
+			}
+		}
+		return 0, fmt.Errorf("CPU usage not found in top output")
+	default:
+		return 0, fmt.Errorf("CPU usage not supported on %s", runtime.GOOS)
 	}
-
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		if !strings.HasPrefix(line, "cpu ") {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 8 {
-			return 0, fmt.Errorf("invalid CPU stats format")
-		}
-
-		// Parse CPU times
-		user, err := strconv.ParseInt(fields[1], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("failed to parse user time: %v", err)
-		}
-
-		nice, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("failed to parse nice time: %v", err)
-		}
-
-		system, err := strconv.ParseInt(fields[3], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("failed to parse system time: %v", err)
-		}
-
-		idle, err := strconv.ParseInt(fields[4], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("failed to parse idle time: %v", err)
-		}
-
-		// Calculate CPU usage
-		total := user + nice + system + idle
-		used := total - idle
-		usage := float64(used) / float64(total) * 100.0
-
-		return usage, nil
-	}
-
-	return 0, fmt.Errorf("CPU stats not found")
 }
 
 func getMemoryInfo() (MemoryInfo, error) {
 	var info MemoryInfo
 
-	// Read /proc/meminfo
-	content, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return info, fmt.Errorf("failed to read /proc/meminfo: %v", err)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		fields := strings.SplitN(line, ":", 2)
-		if len(fields) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(fields[0])
-		value := strings.Fields(strings.TrimSpace(fields[1]))[0]
-		size, err := strconv.ParseInt(value, 10, 64)
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/meminfo
+		content, err := os.ReadFile("/proc/meminfo")
 		if err != nil {
-			continue
+			return info, fmt.Errorf("failed to read /proc/meminfo: %v", err)
 		}
 
-		switch key {
-		case "MemTotal":
-			info.Total = size * 1024
-		case "MemFree":
-			info.Free = size * 1024
-		case "MemShared":
-			info.Shared = size * 1024
-		case "Buffers":
-			info.Buffers = size * 1024
-		case "Cached":
-			info.Cached = size * 1024
-		case "SwapTotal":
-			info.SwapTotal = size * 1024
-		case "SwapFree":
-			info.SwapFree = size * 1024
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			fields := strings.SplitN(line, ":", 2)
+			if len(fields) != 2 {
+				continue
+			}
+
+			key := strings.TrimSpace(fields[0])
+			value := strings.Fields(strings.TrimSpace(fields[1]))[0]
+			size, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				continue
+			}
+
+			switch key {
+			case "MemTotal":
+				info.Total = size * 1024
+			case "MemFree":
+				info.Free = size * 1024
+			case "MemShared":
+				info.Shared = size * 1024
+			case "Buffers":
+				info.Buffers = size * 1024
+			case "Cached":
+				info.Cached = size * 1024
+			case "SwapTotal":
+				info.SwapTotal = size * 1024
+			case "SwapFree":
+				info.SwapFree = size * 1024
+			}
 		}
+
+		// Calculate used memory
+		info.Used = info.Total - info.Free - info.Buffers - info.Cached
+		info.SwapUsed = info.SwapTotal - info.SwapFree
+
+	case "darwin":
+		// macOS - use vm_stat command
+		cmd := exec.Command("vm_stat")
+		output, err := cmd.Output()
+		if err != nil {
+			return info, fmt.Errorf("failed to get memory info on macOS: %v", err)
+		}
+
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				continue
+			}
+
+			key := strings.TrimSuffix(fields[0], ":")
+			value := strings.TrimSuffix(fields[1], ".")
+
+			size, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				continue
+			}
+
+			// Convert pages to bytes (4096 bytes per page on macOS)
+			sizeBytes := size * 4096
+
+			switch key {
+			case "Pages free":
+				info.Free = sizeBytes
+			case "Pages active":
+				info.Used += sizeBytes
+			case "Pages inactive":
+				info.Used += sizeBytes
+			case "Pages wired down":
+				info.Used += sizeBytes
+			case "Pages speculative":
+				info.Used += sizeBytes
+			}
+		}
+
+		// Get total memory using sysctl
+		cmd = exec.Command("sysctl", "-n", "hw.memsize")
+		if output, err := cmd.Output(); err == nil {
+			if total, err := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64); err == nil {
+				info.Total = total
+			}
+		}
+
+	case "windows":
+		// Windows - basic info
+		info.Total = 0 // Would need Windows API calls for detailed info
+		info.Free = 0
+		info.Used = 0
+
+	default:
+		// Fallback for other operating systems
+		info.Total = 0
+		info.Free = 0
+		info.Used = 0
 	}
-
-	// Calculate used memory
-	info.Used = info.Total - info.Free - info.Buffers - info.Cached
-	info.SwapUsed = info.SwapTotal - info.SwapFree
 
 	return info, nil
 }
@@ -425,11 +589,13 @@ func getMemoryInfo() (MemoryInfo, error) {
 func getDiskInfo() ([]DiskInfo, error) {
 	var disks []DiskInfo
 
-	// Read /proc/mounts
-	content, err := os.ReadFile("/proc/mounts")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read /proc/mounts: %v", err)
-	}
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/mounts
+		content, err := os.ReadFile("/proc/mounts")
+		if err != nil {
+			return nil, fmt.Errorf("failed to read /proc/mounts: %v", err)
+		}
 
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
@@ -527,6 +693,70 @@ func getDiskInfo() ([]DiskInfo, error) {
 		}
 	}
 
+	case "darwin":
+		// macOS - use df command without -B1 flag which might not be supported
+		cmd := exec.Command("df")
+		output, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get disk info on macOS: %v", err)
+		}
+
+		lines := strings.Split(string(output), "\n")
+		for i, line := range lines {
+			if i == 0 || line == "" {
+				continue
+			}
+
+			fields := strings.Fields(line)
+			if len(fields) < 6 {
+				continue
+			}
+
+			var disk DiskInfo
+			disk.Device = fields[0]
+			disk.MountPoint = fields[8] // Mount point is typically the last field
+			disk.FSType = fields[8] // Filesystem type is typically field 8
+
+			// Parse size in 512-byte blocks and convert to bytes
+			total, err := strconv.ParseInt(fields[1], 10, 64)
+			if err != nil {
+				continue
+			}
+			disk.Total = total * 512
+
+			used, err := strconv.ParseInt(fields[2], 10, 64)
+			if err != nil {
+				continue
+			}
+			disk.Used = used * 512
+
+			free, err := strconv.ParseInt(fields[3], 10, 64)
+			if err != nil {
+				continue
+			}
+			disk.Free = free * 512
+
+			disks = append(disks, disk)
+		}
+
+	case "windows":
+		// Windows - basic info
+		// Would need Windows API calls for detailed disk info
+		var disk DiskInfo
+		disk.Device = "C:"
+		disk.MountPoint = "C:\\"
+		disk.FSType = "NTFS"
+		disks = append(disks, disk)
+
+	default:
+		// Fallback for other operating systems
+		var disk DiskInfo
+		disk.Device = "unknown"
+		disk.MountPoint = "/"
+		disk.FSType = "unknown"
+		disks = append(disks, disk)
+	}
+
 	return disks, nil
 }
 
@@ -606,57 +836,122 @@ func getSystemEnvironment() ([]string, error) {
 }
 
 func getBootTime() (time.Time, error) {
-	// Read /proc/uptime
-	content, err := os.ReadFile("/proc/uptime")
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to read /proc/uptime: %v", err)
-	}
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/uptime
+		content, err := os.ReadFile("/proc/uptime")
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to read /proc/uptime: %v", err)
+		}
 
-	fields := strings.Fields(string(content))
-	if len(fields) < 1 {
-		return time.Time{}, fmt.Errorf("invalid uptime format")
-	}
+		fields := strings.Fields(string(content))
+		if len(fields) < 1 {
+			return time.Time{}, fmt.Errorf("invalid uptime format")
+		}
 
-	uptime, err := strconv.ParseFloat(fields[0], 64)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse uptime: %v", err)
-	}
+		uptime, err := strconv.ParseFloat(fields[0], 64)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to parse uptime: %v", err)
+		}
 
-	return time.Now().Add(-time.Duration(uptime) * time.Second), nil
+		return time.Now().Add(-time.Duration(uptime) * time.Second), nil
+	case "darwin":
+		// macOS - use sysctl to get boot time
+		cmd := exec.Command("sysctl", "-n", "kern.boottime")
+		output, err := cmd.Output()
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to get boot time on macOS: %v", err)
+		}
+
+		// Parse output like: { sec = 1234567890, usec = 123456 }
+		outputStr := strings.TrimSpace(string(output))
+		if strings.HasPrefix(outputStr, "{ sec = ") {
+			secStr := strings.Split(strings.Split(outputStr, "sec = ")[1], ",")[0]
+			sec, err := strconv.ParseInt(secStr, 10, 64)
+			if err == nil {
+				return time.Unix(sec, 0), nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("failed to parse boot time on macOS")
+	default:
+		return time.Time{}, fmt.Errorf("boot time not supported on %s", runtime.GOOS)
+	}
 }
 
 func getLoadAverage() ([]float64, error) {
-	// Read /proc/loadavg
-	content, err := os.ReadFile("/proc/loadavg")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read /proc/loadavg: %v", err)
-	}
-
-	fields := strings.Fields(string(content))
-	if len(fields) < 3 {
-		return nil, fmt.Errorf("invalid load average format")
-	}
-
-	var loadAvg []float64
-	for i := 0; i < 3; i++ {
-		load, err := strconv.ParseFloat(fields[i], 64)
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/loadavg
+		content, err := os.ReadFile("/proc/loadavg")
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse load average: %v", err)
+			return nil, fmt.Errorf("failed to read /proc/loadavg: %v", err)
 		}
-		loadAvg = append(loadAvg, load)
-	}
 
-	return loadAvg, nil
+		fields := strings.Fields(string(content))
+		if len(fields) < 3 {
+			return nil, fmt.Errorf("invalid load average format")
+		}
+
+		var loadAvg []float64
+		for i := 0; i < 3; i++ {
+			load, err := strconv.ParseFloat(fields[i], 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse load average: %v", err)
+			}
+			loadAvg = append(loadAvg, load)
+		}
+
+		return loadAvg, nil
+	case "darwin":
+		// macOS - use sysctl to get load average
+		cmd := exec.Command("sysctl", "-n", "vm.loadavg")
+		output, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get load average on macOS: %v", err)
+		}
+
+		// Parse output like: { 1.23 1.45 1.67 }
+		outputStr := strings.TrimSpace(string(output))
+		outputStr = strings.Trim(outputStr, "{}")
+		fields := strings.Fields(outputStr)
+
+		var loadAvg []float64
+		for _, field := range fields {
+			load, err := strconv.ParseFloat(field, 64)
+			if err != nil {
+				continue
+			}
+			loadAvg = append(loadAvg, load)
+		}
+
+		return loadAvg, nil
+	default:
+		return nil, fmt.Errorf("load average not supported on %s", runtime.GOOS)
+	}
 }
 
 func getKernelVersion() (string, error) {
-	// Read /proc/version
-	content, err := os.ReadFile("/proc/version")
-	if err != nil {
-		return "", fmt.Errorf("failed to read /proc/version: %v", err)
-	}
+	switch runtime.GOOS {
+	case "linux":
+		// Read /proc/version
+		content, err := os.ReadFile("/proc/version")
+		if err != nil {
+			return "", fmt.Errorf("failed to read /proc/version: %v", err)
+		}
 
-	return strings.TrimSpace(string(content)), nil
+		return strings.TrimSpace(string(content)), nil
+	case "darwin":
+		// macOS - use uname to get kernel version
+		cmd := exec.Command("uname", "-r")
+		output, err := cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("failed to get kernel version on macOS: %v", err)
+		}
+
+		return strings.TrimSpace(string(output)), nil
+	default:
+		return "", fmt.Errorf("kernel version not supported on %s", runtime.GOOS)
+	}
 }
 
 func getArchitecture() (string, error) {
@@ -670,33 +965,49 @@ func getArchitecture() (string, error) {
 }
 
 func getTimezone() (string, error) {
-	// Read /etc/timezone
-	content, err := os.ReadFile("/etc/timezone")
-	if err != nil {
-		return "", fmt.Errorf("failed to read /etc/timezone: %v", err)
-	}
+	switch runtime.GOOS {
+	case "linux":
+		// Read /etc/timezone
+		content, err := os.ReadFile("/etc/timezone")
+		if err != nil {
+			return "", fmt.Errorf("failed to read /etc/timezone: %v", err)
+		}
 
-	return strings.TrimSpace(string(content)), nil
+		return strings.TrimSpace(string(content)), nil
+	case "darwin":
+		// macOS - return UTC as fallback
+		return "UTC", nil
+	default:
+		return "", fmt.Errorf("timezone not supported on %s", runtime.GOOS)
+	}
 }
 
 func getLocale() (string, error) {
-	// Read /etc/default/locale
-	content, err := os.ReadFile("/etc/default/locale")
-	if err != nil {
-		return "", fmt.Errorf("failed to read /etc/default/locale: %v", err)
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		fields := strings.SplitN(line, "=", 2)
-		if len(fields) != 2 {
-			continue
+	switch runtime.GOOS {
+	case "linux":
+		// Read /etc/default/locale
+		content, err := os.ReadFile("/etc/default/locale")
+		if err != nil {
+			return "", fmt.Errorf("failed to read /etc/default/locale: %v", err)
 		}
 
-		if strings.TrimSpace(fields[0]) == "LANG" {
-			return strings.Trim(strings.TrimSpace(fields[1]), "\""), nil
-		}
-	}
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			fields := strings.SplitN(line, "=", 2)
+			if len(fields) != 2 {
+				continue
+			}
 
-	return "", fmt.Errorf("locale not found")
+			if strings.TrimSpace(fields[0]) == "LANG" {
+				return strings.Trim(strings.TrimSpace(fields[1]), "\""), nil
+			}
+		}
+
+		return "", fmt.Errorf("locale not found")
+	case "darwin":
+		// macOS - return en_US as fallback
+		return "en_US", nil
+	default:
+		return "", fmt.Errorf("locale not supported on %s", runtime.GOOS)
+	}
 }

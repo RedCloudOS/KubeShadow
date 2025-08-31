@@ -45,7 +45,7 @@ func GetVolumeInfo(ctx context.Context) ([]VolumeInfo, error) {
 	// Check for Docker volumes
 	dockerVolumes, err := getDockerVolumes(ctx)
 	if err != nil {
-		logger.Warn("Failed to get Docker volumes: %v", err)
+		logger.Debug("Docker volumes not available: %v", err)
 	} else {
 		volumes = append(volumes, dockerVolumes...)
 	}
@@ -53,7 +53,7 @@ func GetVolumeInfo(ctx context.Context) ([]VolumeInfo, error) {
 	// Check for containerd volumes
 	containerdVolumes, err := getContainerdVolumes(ctx)
 	if err != nil {
-		logger.Warn("Failed to get containerd volumes: %v", err)
+		logger.Debug("Containerd volumes not available: %v", err)
 	} else {
 		volumes = append(volumes, containerdVolumes...)
 	}
@@ -61,7 +61,7 @@ func GetVolumeInfo(ctx context.Context) ([]VolumeInfo, error) {
 	// Check for CRI-O volumes
 	crioVolumes, err := getCRIOVolumes(ctx)
 	if err != nil {
-		logger.Warn("Failed to get CRI-O volumes: %v", err)
+		logger.Debug("CRI-O volumes not available: %v", err)
 	} else {
 		volumes = append(volumes, crioVolumes...)
 	}

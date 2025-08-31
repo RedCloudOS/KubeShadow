@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +60,12 @@ type ProcessLimits struct {
 func GetProcessInfo(ctx context.Context) ([]ProcessInfo, error) {
 	var processes []ProcessInfo
 
+	// Check if we're on a platform that supports /proc filesystem
+	if runtime.GOOS != "linux" {
+		// Fallback to using ps command
+		return getProcessInfoFallback()
+	}
+
 	// Read /proc directory
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -76,6 +84,89 @@ func GetProcessInfo(ctx context.Context) ([]ProcessInfo, error) {
 		if err != nil {
 			logger.Warn("Failed to get details for process %d: %v", pid, err)
 			continue
+		}
+
+		processes = append(processes, process)
+	}
+
+	return processes, nil
+}
+
+func getProcessInfoFallback() ([]ProcessInfo, error) {
+	var processes []ProcessInfo
+
+	// Try ps command
+	if psProcesses, err := getPSProcesses(); err == nil {
+		processes = append(processes, psProcesses...)
+		return processes, nil
+	}
+
+	// If ps fails, return empty list with info message
+	logger.Info("Unable to get process information on this platform")
+	return processes, nil
+}
+
+func getPSProcesses() ([]ProcessInfo, error) {
+	var processes []ProcessInfo
+
+	// Run ps command with detailed output
+	cmd := exec.Command("ps", "-axo", "pid,ppid,user,pcpu,pmem,stat,comm,command")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run ps: %v", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for i, line := range lines {
+		if i == 0 {
+			continue // Skip header
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) < 7 {
+			continue
+		}
+
+		// Parse fields
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+
+		ppid, err := strconv.Atoi(fields[1])
+		if err != nil {
+			ppid = 0
+		}
+
+		user := fields[2]
+		cpu, _ := strconv.ParseFloat(fields[3], 64)
+		memory, _ := strconv.ParseFloat(fields[4], 64)
+		status := fields[5]
+		name := fields[6]
+		command := ""
+		if len(fields) > 7 {
+			command = strings.Join(fields[7:], " ")
+		}
+
+		process := ProcessInfo{
+			PID:         pid,
+			Name:        name,
+			User:        user,
+			CommandLine: command,
+			CPU:         cpu,
+			Memory:      int64(memory * 1024), // Convert to bytes
+			Status:      status,
+			ParentPID:   ppid,
+			Children:    []int{},
+			Threads:     1,
+			Priority:    0,
+			Nice:        0,
+			StartTime:   time.Time{},
+			Uptime:      0,
+			WorkingDir:  "",
+			Environment: []string{},
+			Capabilities: []string{},
+			Limits:      ProcessLimits{},
 		}
 
 		processes = append(processes, process)

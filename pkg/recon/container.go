@@ -52,16 +52,22 @@ func GetContainerInfo(ctx context.Context) ([]*ContainerInfo, error) {
 	// Check for Docker
 	if dockerContainers, err := getDockerContainers(ctx); err == nil {
 		containers = append(containers, dockerContainers...)
+	} else {
+		logger.Debug("Docker containers not available: %v", err)
 	}
 
 	// Check for containerd
 	if containerdContainers, err := getContainerdContainers(ctx); err == nil {
 		containers = append(containers, containerdContainers...)
+	} else {
+		logger.Debug("Containerd containers not available: %v", err)
 	}
 
 	// Check for CRI-O
 	if criOContainers, err := getCRIOContainers(ctx); err == nil {
 		containers = append(containers, criOContainers...)
+	} else {
+		logger.Debug("CRI-O containers not available: %v", err)
 	}
 
 	if len(containers) == 0 {

@@ -6,8 +6,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"kubeshadow/pkg/logger"
 )
@@ -283,6 +285,12 @@ func getDNSServers() ([]string, error) {
 func getOpenPorts() ([]Port, error) {
 	var ports []Port
 
+	// Check if we're on a platform that supports /proc filesystem
+	if runtime.GOOS != "linux" {
+		// Fallback to using netstat or ss command
+		return getOpenPortsFallback()
+	}
+
 	// Get TCP ports
 	tcpPorts, err := getTCPPorts()
 	if err != nil {
@@ -296,6 +304,150 @@ func getOpenPorts() ([]Port, error) {
 		return nil, fmt.Errorf("failed to get UDP ports: %v", err)
 	}
 	ports = append(ports, udpPorts...)
+
+	return ports, nil
+}
+
+func getOpenPortsFallback() ([]Port, error) {
+	var ports []Port
+
+	// Try netstat first
+	if netstatPorts, err := getNetstatPorts(); err == nil {
+		ports = append(ports, netstatPorts...)
+		return ports, nil
+	}
+
+	// Try ss command as fallback
+	if ssPorts, err := getSSPorts(); err == nil {
+		ports = append(ports, ssPorts...)
+		return ports, nil
+	}
+
+	// If both fail, return empty list with info message
+	logger.Info("Unable to get open ports on this platform")
+	return ports, nil
+}
+
+func getNetstatPorts() ([]Port, error) {
+	var ports []Port
+
+	// Run netstat command with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "netstat", "-an")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run netstat: %v", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+
+		// Parse protocol and address
+		proto := fields[0]
+		localAddr := fields[3]
+		state := ""
+		if len(fields) > 5 {
+			state = fields[5]
+		}
+
+		// Parse port from address
+		parts := strings.Split(localAddr, ":")
+		if len(parts) < 2 {
+			continue
+		}
+
+		portStr := parts[len(parts)-1]
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			continue
+		}
+
+		isTCP := strings.Contains(strings.ToLower(proto), "tcp")
+		isUDP := strings.Contains(strings.ToLower(proto), "udp")
+		isListening := strings.Contains(strings.ToLower(state), "listen")
+
+		ports = append(ports, Port{
+			Number:      port,
+			Protocol:    strings.ToLower(proto),
+			State:       state,
+			Service:     getServiceName(port, strings.ToLower(proto)),
+			Process:     "",
+			User:        "",
+			LocalAddr:   localAddr,
+			RemoteAddr:  "",
+			IsListening: isListening,
+			IsTCP:       isTCP,
+			IsUDP:       isUDP,
+		})
+	}
+
+	return ports, nil
+}
+
+func getSSPorts() ([]Port, error) {
+	var ports []Port
+
+	// Run ss command with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "ss", "-tuln")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run ss: %v", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+
+		// Parse protocol and address
+		proto := fields[0]
+		localAddr := fields[3]
+		state := ""
+		if len(fields) > 4 {
+			state = fields[4]
+		}
+
+		// Parse port from address
+		parts := strings.Split(localAddr, ":")
+		if len(parts) < 2 {
+			continue
+		}
+
+		portStr := parts[len(parts)-1]
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			continue
+		}
+
+		isTCP := strings.Contains(strings.ToLower(proto), "tcp")
+		isUDP := strings.Contains(strings.ToLower(proto), "udp")
+		isListening := strings.Contains(strings.ToLower(state), "listen")
+
+		ports = append(ports, Port{
+			Number:      port,
+			Protocol:    strings.ToLower(proto),
+			State:       state,
+			Service:     getServiceName(port, strings.ToLower(proto)),
+			Process:     "",
+			User:        "",
+			LocalAddr:   localAddr,
+			RemoteAddr:  "",
+			IsListening: isListening,
+			IsTCP:       isTCP,
+			IsUDP:       isUDP,
+		})
+	}
 
 	return ports, nil
 }
@@ -497,6 +649,12 @@ func getNetworkInterfaces() ([]Interface, error) {
 func getRoutes() ([]Route, error) {
 	var routes []Route
 
+	// Check if we're on a platform that supports /proc filesystem
+	if runtime.GOOS != "linux" {
+		// Fallback to using route command
+		return getRoutesFallback()
+	}
+
 	// Read /proc/net/route
 	content, err := os.ReadFile("/proc/net/route")
 	if err != nil {
@@ -559,8 +717,80 @@ func getRoutes() ([]Route, error) {
 	return routes, nil
 }
 
+func getRoutesFallback() ([]Route, error) {
+	var routes []Route
+
+	// Try route command with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "route", "-n")
+	output, err := cmd.Output()
+	if err != nil {
+		// Try netstat -r as fallback with timeout
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+
+		cmd = exec.CommandContext(ctx2, "netstat", "-r")
+		output, err = cmd.Output()
+		if err != nil {
+			logger.Info("Unable to get routes on this platform")
+			return routes, nil
+		}
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+
+		// Skip header lines
+		if fields[0] == "Destination" || fields[0] == "Kernel" {
+			continue
+		}
+
+		destination := fields[0]
+		gateway := fields[1]
+		netmask := ""
+		if len(fields) > 2 {
+			netmask = fields[2]
+		}
+		interfaceName := ""
+		if len(fields) > 3 {
+			interfaceName = fields[3]
+		}
+
+		isDefault := destination == "default" || destination == "0.0.0.0"
+		isHost := netmask == "255.255.255.255"
+		isNetwork := !isDefault && !isHost
+		isGateway := gateway != "*" && gateway != "0.0.0.0"
+
+		routes = append(routes, Route{
+			Destination: destination,
+			Gateway:     gateway,
+			Netmask:     netmask,
+			Interface:   interfaceName,
+			Metric:      0,
+			IsDefault:   isDefault,
+			IsHost:      isHost,
+			IsNetwork:   isNetwork,
+			IsGateway:   isGateway,
+		})
+	}
+
+	return routes, nil
+}
+
 func getConnections() ([]Connection, error) {
 	var connections []Connection
+
+	// Check if we're on a platform that supports /proc filesystem
+	if runtime.GOOS != "linux" {
+		// Fallback to using netstat command
+		return getConnectionsFallback()
+	}
 
 	// Get TCP connections
 	tcpConns, err := getTCPConnections()
@@ -575,6 +805,75 @@ func getConnections() ([]Connection, error) {
 		return nil, fmt.Errorf("failed to get UDP connections: %v", err)
 	}
 	connections = append(connections, udpConns...)
+
+	return connections, nil
+}
+
+func getConnectionsFallback() ([]Connection, error) {
+	var connections []Connection
+
+	// Try netstat command with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "netstat", "-an")
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Info("Unable to get connections on this platform")
+		return connections, nil
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+
+		proto := fields[0]
+		localAddr := fields[3]
+		remoteAddr := ""
+		state := ""
+		if len(fields) > 4 {
+			remoteAddr = fields[4]
+		}
+		if len(fields) > 5 {
+			state = fields[5]
+		}
+
+		// Parse addresses
+		localParts := strings.Split(localAddr, ":")
+		remoteParts := strings.Split(remoteAddr, ":")
+
+		if len(localParts) < 2 {
+			continue
+		}
+
+		localPort, _ := strconv.Atoi(localParts[len(localParts)-1])
+		remotePort := 0
+		if len(remoteParts) >= 2 {
+			remotePort, _ = strconv.Atoi(remoteParts[len(remoteParts)-1])
+		}
+
+		isTCP := strings.Contains(strings.ToLower(proto), "tcp")
+		isUDP := strings.Contains(strings.ToLower(proto), "udp")
+
+		connections = append(connections, Connection{
+			LocalAddr:     localAddr,
+			LocalPort:     localPort,
+			RemoteAddr:    remoteAddr,
+			RemotePort:    remotePort,
+			State:         state,
+			Protocol:      strings.ToLower(proto),
+			Process:       "", // Process info not available in netstat output
+			User:          "", // User info not available in netstat output
+			Inode:         0,  // Inode info not available in netstat output
+			IsTCP:         isTCP,
+			IsUDP:         isUDP,
+			IsListening:   false, // netstat doesn't show listening state directly
+			IsEstablished: false, // netstat doesn't show established state directly
+		})
+	}
 
 	return connections, nil
 }
@@ -720,6 +1019,12 @@ func getUDPConnections() ([]Connection, error) {
 func getFirewallRules() ([]FirewallRule, error) {
 	var rules []FirewallRule
 
+	// Check if we're on a platform that supports iptables
+	if runtime.GOOS != "linux" {
+		// Fallback to using pfctl on macOS or other platform-specific tools
+		return getFirewallRulesFallback()
+	}
+
 	// Read iptables rules
 	cmd := exec.Command("iptables", "-L", "-n", "-v")
 	output, err := cmd.Output()
@@ -772,8 +1077,55 @@ func getFirewallRules() ([]FirewallRule, error) {
 	return rules, nil
 }
 
+func getFirewallRulesFallback() ([]FirewallRule, error) {
+	var rules []FirewallRule
+
+	// Try pfctl on macOS with timeout
+	if runtime.GOOS == "darwin" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "pfctl", "-s", "rules")
+		output, err := cmd.Output()
+		if err == nil {
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+
+				// Parse pf rule (simplified)
+				rule := FirewallRule{
+					Chain:       "pf",
+					Target:      "pass",
+					Protocol:    "any",
+					Source:      "any",
+					Destination: "any",
+					Sport:       "any",
+					Dport:       "any",
+					Interface:   "any",
+					Options:     []string{line},
+					Comment:     line,
+				}
+				rules = append(rules, rule)
+			}
+			return rules, nil
+		}
+	}
+
+	// If no platform-specific firewall tool is available
+	logger.Info("No firewall rules available on this platform")
+	return rules, nil
+}
+
 func getInterfaceStats(name string) (InterfaceStats, error) {
 	var stats InterfaceStats
+
+	// Check if we're on a platform that supports /proc filesystem
+	if runtime.GOOS != "linux" {
+		// Fallback to using netstat or ifconfig
+		return getInterfaceStatsFallback(name)
+	}
 
 	// Read /proc/net/dev
 	content, err := os.ReadFile("/proc/net/dev")
@@ -811,6 +1163,45 @@ func getInterfaceStats(name string) (InterfaceStats, error) {
 		}
 	}
 
+	return stats, nil
+}
+
+func getInterfaceStatsFallback(name string) (InterfaceStats, error) {
+	var stats InterfaceStats
+
+	// Try netstat -i on macOS/Unix systems with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "netstat", "-i")
+	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) < 8 {
+				continue
+			}
+
+			// Skip header
+			if fields[0] == "Name" || fields[0] == "Kernel" {
+				continue
+			}
+
+			if fields[0] == name {
+				// Parse basic stats (netstat format varies by platform)
+				stats.PacketsReceived, _ = strconv.ParseInt(fields[3], 10, 64)
+				stats.PacketsSent, _ = strconv.ParseInt(fields[5], 10, 64)
+				stats.ErrorsReceived, _ = strconv.ParseInt(fields[4], 10, 64)
+				stats.ErrorsSent, _ = strconv.ParseInt(fields[6], 10, 64)
+				break
+			}
+		}
+		return stats, nil
+	}
+
+	// If netstat fails, return empty stats
+	logger.Debug("Unable to get interface statistics for %s on this platform", name)
 	return stats, nil
 }
 
