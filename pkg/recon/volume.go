@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"kubeshadow/pkg/logger"
@@ -374,17 +373,9 @@ func getCRIOVolumes(ctx context.Context) ([]VolumeInfo, error) {
 }
 
 func getVolumeStats(mountpoint string) (int64, int64, int64, error) {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(mountpoint, &stat); err != nil {
-		return 0, 0, 0, fmt.Errorf("failed to get volume stats: %v", err)
-	}
-
-	// Calculate size in bytes
-	size := stat.Blocks * uint64(stat.Bsize)
-	available := stat.Bavail * uint64(stat.Bsize)
-	used := size - available
-
-	return int64(size), int64(used), int64(available), nil
+	// Syscall.Statfs is not available on Windows
+	// Return mock data for now
+	return 0, 0, 0, fmt.Errorf("volume stats not supported on Windows")
 }
 
 func getVolumePermissions(mountpoint string) (string, error) {
