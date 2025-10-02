@@ -9,6 +9,7 @@ import (
 	// Import specific module sub-packages
 	cluster_exploit "kubeshadow/modules/cluster_exploit"
 	dashboard_cmd "kubeshadow/modules/dashboard"
+	data_exfil "kubeshadow/modules/data_exfil"
 	demo "kubeshadow/modules/demo"
 	multi_cloud "kubeshadow/modules/multi_cloud"
 	out_cluster "kubeshadow/modules/out_cluster"
@@ -31,7 +32,7 @@ var rootCmd = &cobra.Command{
 		// Start dashboard if requested
 		dashboardFlag, _ := cmd.Flags().GetBool("dashboard")
 		dashboardPort, _ := cmd.Flags().GetInt("dashboard-port")
-		
+
 		if dashboardFlag {
 			if err := dashboard.StartDashboardIfRequested(dashboardFlag, dashboardPort); err != nil {
 				fmt.Printf("Failed to start dashboard: %v\n", err)
@@ -67,6 +68,7 @@ func init() {
 	rootCmd.AddCommand(out_cluster.RegistryBackdoorCmd)
 	rootCmd.AddCommand(dashboard_cmd.DashboardCmd)
 	rootCmd.AddCommand(demo.DemoCmd)
+	rootCmd.AddCommand(data_exfil.DataExfilCmd)
 
 	// Since the root command's Run function now explicitly prints help,
 	// we might remove the default help command printing from Cobra.
@@ -77,7 +79,7 @@ func main() {
 	// Set up graceful shutdown for dashboard
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	
+
 	go func() {
 		<-c
 		fmt.Println("\nShutting down dashboard...")
