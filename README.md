@@ -16,26 +16,26 @@ KubeShadow is a powerful Kubernetes security testing and exploitation toolkit de
 
 ### Module Categories
 
-#### 1. Cluster Exploitation (`modules/cluster_exploit/`)
-- **ETCD Injection**: Direct pod injection via etcd
-- **Kubelet Exploitation**: Kubelet API exploitation and hijacking
-- **Sidecar Injection**: Pod sidecar container injection
-- **RBAC Escalation**: RBAC privilege escalation and permission analysis
-- **Namespace Pivot**: Cross-namespace access and privilege movement
-
-#### 2. Cloud Exploitation (`modules/multi_cloud/`)
-- **Metadata Hijacking**: Cloud metadata service exploitation
-- **Cloud Privilege Escalation**: Cloud IAM privilege escalation
-- **Assume Role Abuse**: Cloud role assumption and token abuse
-- **Cloud Elevator**: Automated cloud privilege escalation paths
-
-#### 3. Reconnaissance (`modules/recon/`)
+#### 1. Reconnaissance (`modules/recon/`)
 - **Cluster Reconnaissance**: Comprehensive Kubernetes cluster information gathering
   - RBAC analysis
   - Network policy enumeration
   - Service account discovery
   - Pod security context analysis
   - Node information gathering
+    
+#### 2. Cluster Exploitation (`modules/cluster_exploit/`)
+- **ETCD Injection**: Direct pod injection via etcd
+- **Kubelet Exploitation**: Kubelet API exploitation and hijacking
+- **Sidecar Injection**: Pod sidecar container injection
+- **RBAC Escalation**: RBAC privilege escalation and permission analysis
+- **Namespace Pivot**: Cross-namespace access and privilege movement
+
+#### 3. Cloud Exploitation (`modules/multi_cloud/`)
+- **Metadata Hijacking**: Cloud metadata service exploitation
+- **Cloud Privilege Escalation**: Cloud IAM privilege escalation
+- **Assume Role Abuse**: Cloud role assumption and token abuse
+- **Cloud Elevator**: Automated cloud privilege escalation paths
 
 #### 4. Stealth Operations (`modules/stealth/`)
 - **Audit Bypass**: Audit policy bypass testing and analysis
