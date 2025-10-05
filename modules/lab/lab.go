@@ -26,15 +26,21 @@ var LabCmd = &cobra.Command{
 	Long: `Deploy a complete KubeShadow lab environment with intentionally vulnerable configurations
 for hands-on security testing practice. Supports cloud providers and local environments.
 
-Cluster size options (reduces costs and disk usage):
-- minimal: 1 node, 20GB disk (t3.micro/e2-micro/Standard_B1s)
-- small: 2 nodes, 50GB disk (t3.small/e2-small/Standard_B2s)  
-- medium: 3 nodes, 100GB disk (t3.medium/e2-medium/Standard_B2ms)
+Cluster size options (optimized for minimal costs and disk usage):
+- minimal: 1 node, 30GB disk (t3.small/e2-standard-2/Standard_B2s) - FASTEST, avoids quota issues
+- small: 2 nodes, 50GB disk (t3.medium/e2-standard-2/Standard_B2s)  
+- medium: 3 nodes, 100GB disk (t3.large/e2-standard-4/Standard_B4ms)
+
+All providers use optimized configurations:
+- AWS: t3 instances with GP3 disks for better performance
+- GCP: Zonal clusters with standard disks to avoid SSD quota
+- Azure: Standard SSD disks to avoid premium quota issues
 
 Examples:
   kubeshadow lab --provider minikube
   kubeshadow lab --provider aws --cluster-size minimal --use-spot
-  kubeshadow lab --provider gcp --cluster-size small --use-spot`,
+  kubeshadow lab --provider gcp --cluster-size minimal --use-spot
+  kubeshadow lab --provider azure --cluster-size minimal --use-spot`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Execute lab creation
 		provider, err := cmd.Flags().GetString("provider")
@@ -177,11 +183,11 @@ func deployAWSLab(region, clusterName, clusterSize string, useSpot bool) error {
 	fmt.Println("📦 Creating EKS cluster...")
 
 	// Get cluster configuration based on size
-	config := getClusterConfig(clusterSize, useSpot)
+	config := getAWSClusterConfig(clusterSize, useSpot)
 	fmt.Printf("💡 Using %s cluster configuration to reduce costs and disk usage...\n", clusterSize)
 	fmt.Printf("📊 Nodes: %d, Instance: %s\n", config.NumNodes, config.MachineType)
 
-	// Create EKS cluster with size-specific configuration
+	// Create EKS cluster with minimal configuration optimized for lab
 	args := []string{
 		"create", "cluster",
 		"--name", clusterName,
@@ -196,6 +202,9 @@ func deployAWSLab(region, clusterName, clusterSize string, useSpot bool) error {
 		"--ssh-access",
 		"--ssh-public-key", "kubeshadow-lab",
 		"--full-ecr-access",
+		"--node-volume-size", config.DiskSize,
+		"--node-volume-type", config.DiskType,
+		"--node-ami-family", "AmazonLinux2", // Use AL2 for better compatibility
 	}
 
 	// Add spot instance configuration if requested
@@ -230,20 +239,18 @@ func deployGCPLab(region, clusterName, clusterSize string, useSpot bool) error {
 	fmt.Printf("💡 Using %s cluster configuration to reduce costs and disk usage...\n", clusterSize)
 	fmt.Printf("📊 Nodes: %d, Disk: %s, Machine: %s\n", config.NumNodes, config.DiskSize, config.MachineType)
 
-	// Create GKE cluster with size-specific configuration
+	// Use zonal cluster for minimal configuration (fastest, avoids SSD quota)
+	zone := region + "-b" // Use zone b for the region (e.g., us-east1-b)
+
+	// Create GKE cluster with minimal zonal configuration
 	args := []string{
 		"container", "clusters", "create", clusterName,
-		"--region", region,
+		"--zone", zone, // Use zone instead of region for minimal config
 		"--num-nodes", fmt.Sprintf("%d", config.NumNodes),
 		"--machine-type", config.MachineType,
 		"--disk-size", config.DiskSize,
 		"--disk-type", config.DiskType,
-		"--enable-autoscaling",
-		"--min-nodes", fmt.Sprintf("%d", config.MinNodes),
-		"--max-nodes", fmt.Sprintf("%d", config.MaxNodes),
-		"--enable-autorepair",
-		"--enable-autoupgrade",
-		"--no-enable-ip-alias", // Disable VPC-native to reduce complexity
+		"--no-enable-insecure-kubelet-readonly-port", // Security: disable insecure kubelet port
 	}
 
 	// Add spot instance configuration if requested
@@ -261,7 +268,7 @@ func deployGCPLab(region, clusterName, clusterSize string, useSpot bool) error {
 	}
 
 	// Get cluster credentials
-	cmd = exec.Command("gcloud", "container", "clusters", "get-credentials", clusterName, "--region", region)
+	cmd = exec.Command("gcloud", "container", "clusters", "get-credentials", clusterName, "--zone", zone)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to get cluster credentials: %w", err)
 	}
@@ -285,15 +292,19 @@ func deployAzureLab(region, clusterName, clusterSize string, useSpot bool) error
 		return fmt.Errorf("failed to create resource group: %w", err)
 	}
 
-	// Create AKS cluster with size-specific configuration
+	// Create AKS cluster with minimal configuration optimized for lab
 	args := []string{
 		"aks", "create",
 		"--resource-group", resourceGroup,
 		"--name", clusterName,
 		"--node-count", fmt.Sprintf("%d", config.NumNodes),
 		"--node-vm-size", config.MachineType,
+		"--node-osdisk-size", config.DiskSize,
+		"--node-osdisk-type", config.DiskType,
 		"--enable-addons", "monitoring",
 		"--generate-ssh-keys",
+		"--network-plugin", "kubenet", // Use kubenet for simplicity
+		"--no-wait", // Don't wait for completion to speed up
 	}
 
 	// Add spot instance configuration if requested
@@ -533,17 +544,43 @@ func getClusterConfig(clusterSize string, _ bool) ClusterConfig {
 func getGCPClusterConfig(clusterSize string, useSpot bool) ClusterConfig {
 	config := getClusterConfig(clusterSize, useSpot)
 
-	// Override with GCP-specific values
+	// Override with GCP-specific values optimized for minimal zonal clusters
 	switch clusterSize {
 	case "minimal":
-		config.MachineType = "e2-micro"
-		config.DiskType = "pd-standard"
+		config.MachineType = "e2-standard-2" // 2 vCPU, 8 GB RAM (better than e2-micro for lab)
+		config.DiskType = "pd-standard"      // Standard disk to avoid SSD quota issues
+		config.DiskSize = "30"               // 30GB disk (minimal but sufficient)
 	case "small":
-		config.MachineType = "e2-small"
+		config.MachineType = "e2-standard-2"
 		config.DiskType = "pd-standard"
+		config.DiskSize = "50"
 	case "medium":
-		config.MachineType = "e2-medium"
+		config.MachineType = "e2-standard-4" // 4 vCPU, 16 GB RAM
 		config.DiskType = "pd-standard"
+		config.DiskSize = "100"
+	}
+
+	return config
+}
+
+// getAWSClusterConfig returns AWS-specific cluster configuration
+func getAWSClusterConfig(clusterSize string, useSpot bool) ClusterConfig {
+	config := getClusterConfig(clusterSize, useSpot)
+
+	// Override with AWS-specific values optimized for minimal lab clusters
+	switch clusterSize {
+	case "minimal":
+		config.MachineType = "t3.small" // 2 vCPU, 2 GB RAM (better than t3.micro for lab)
+		config.DiskType = "gp3"         // GP3 for better performance than gp2
+		config.DiskSize = "30"          // 30GB disk (minimal but sufficient)
+	case "small":
+		config.MachineType = "t3.medium" // 2 vCPU, 4 GB RAM
+		config.DiskType = "gp3"
+		config.DiskSize = "50"
+	case "medium":
+		config.MachineType = "t3.large" // 2 vCPU, 8 GB RAM
+		config.DiskType = "gp3"
+		config.DiskSize = "100"
 	}
 
 	return config
@@ -553,17 +590,20 @@ func getGCPClusterConfig(clusterSize string, useSpot bool) ClusterConfig {
 func getAzureClusterConfig(clusterSize string, useSpot bool) ClusterConfig {
 	config := getClusterConfig(clusterSize, useSpot)
 
-	// Override with Azure-specific values
+	// Override with Azure-specific values optimized for minimal lab clusters
 	switch clusterSize {
 	case "minimal":
-		config.MachineType = "Standard_B1s" // Azure: B1s (1 vCPU, 1 GB RAM)
-		config.DiskType = "Premium_LRS"
+		config.MachineType = "Standard_B2s" // 2 vCPU, 4 GB RAM (better than B1s for lab)
+		config.DiskType = "StandardSSD_LRS" // Standard SSD to avoid premium quota issues
+		config.DiskSize = "30"              // 30GB disk (minimal but sufficient)
 	case "small":
-		config.MachineType = "Standard_B2s" // Azure: B2s (2 vCPU, 4 GB RAM)
-		config.DiskType = "Premium_LRS"
+		config.MachineType = "Standard_B2s" // 2 vCPU, 4 GB RAM
+		config.DiskType = "StandardSSD_LRS"
+		config.DiskSize = "50"
 	case "medium":
-		config.MachineType = "Standard_B2ms" // Azure: B2ms (2 vCPU, 8 GB RAM)
-		config.DiskType = "Premium_LRS"
+		config.MachineType = "Standard_B4ms" // 4 vCPU, 16 GB RAM
+		config.DiskType = "StandardSSD_LRS"
+		config.DiskSize = "100"
 	}
 
 	return config

@@ -155,15 +155,15 @@ func cleanupGCPCluster(clusterName string) error {
 		return fmt.Errorf("failed to get current context: %w", err)
 	}
 
-	// Extract region from context (simplified)
-	region := "us-west1" // Default region
+	// Extract zone from context (simplified) - zonal clusters use zones, not regions
+	zone := "us-west1-b" // Default zone
 	if strings.Contains(string(output), "us-central1") {
-		region = "us-central1"
+		zone = "us-central1-b"
 	} else if strings.Contains(string(output), "us-east1") {
-		region = "us-east1"
+		zone = "us-east1-b"
 	}
 
-	cmd = exec.Command("gcloud", "container", "clusters", "delete", clusterName, "--region", region, "--quiet")
+	cmd = exec.Command("gcloud", "container", "clusters", "delete", clusterName, "--zone", zone, "--quiet")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
