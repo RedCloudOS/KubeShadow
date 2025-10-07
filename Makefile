@@ -13,16 +13,10 @@ build:
 	@go mod tidy
 	@echo "🧹 Cleaning previous builds... (20%)"
 	@go clean -cache
-	@echo "🔧 Attempting build with CGO... (30%)"
+	@echo "🔧 Building without CGO (fast and reliable)... (30%)"
 	@echo "⏳ Compiling Go modules... (40%)"
-	@if go build -o kubeshadow . 2>/dev/null; then \
-		echo "✅ Build successful with CGO (100%)"; \
-	else \
-		echo "⚠️  CGO build failed, trying without CGO... (50%)"; \
-		echo "⏳ Compiling without CGO... (70%)"; \
-		CGO_ENABLED=0 go build -o kubeshadow .; \
-		echo "✅ Build successful without CGO (100%)"; \
-	fi
+	@CGO_ENABLED=0 go build -ldflags="-s -w" -o kubeshadow .
+	@echo "✅ Build successful! (100%)"
 	@echo "🔧 Making executable... (90%)"
 	@chmod +x kubeshadow
 	@echo "🎉 KubeShadow built successfully! (100%)"
