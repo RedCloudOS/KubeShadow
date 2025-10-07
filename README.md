@@ -1,98 +1,242 @@
 # KubeShadow
 
-KubeShadow is a powerful Kubernetes security testing and exploitation toolkit designed for red team operations and security assessments. It provides a comprehensive suite of modules for testing cluster security, identifying misconfigurations, and validating security controls.
+KubeShadow is a comprehensive Kubernetes security testing and exploitation toolkit designed for red team operations, security assessments, and penetration testing. It provides a Metasploit-style framework with modular architecture for testing cluster security, identifying misconfigurations, and validating security controls.
 
-## Features
+## 🎯 Key Features
 
 ### Core Capabilities
-- **Modular Architecture**: Extensible plugin system for custom functionality
-- **Multiple Attack Vectors**: Support for various exploitation techniques
-- **Comprehensive Reconnaissance**: Detailed cluster and cloud environment analysis
-- **Stealth Operations**: Low-visibility testing capabilities
-- **Cloud Integration**: Multi-cloud provider support (AWS, GCP, Azure)
-- **Out-of-Cluster Operations**: External registry and infrastructure attacks
-- **Robust Error Handling**: Comprehensive error management and reporting
-- **Detailed Logging**: Configurable logging with level filtering
+- **Metasploit-Style Framework**: Comprehensive exploitation framework with payloads, exploits, persistence, and post-exploitation modules
+- **OWASP Top 10 for Kubernetes**: Complete coverage of Kubernetes security risks with automated detection and remediation
+- **Interactive Dashboard**: Real-time attack map visualization with WebSocket updates and graph analysis
+- **Lab Environment**: Automated vulnerable Kubernetes lab deployment (AWS, GCP, Azure, Minikube, Kind)
+- **Cloud Exploitation**: Multi-cloud provider support (AWS EKS, GCP GKE, Azure AKS)
+- **Attack Chain Analysis**: Reconnaissance graph and chaining engine for complex attack paths
+- **Data Exfiltration**: Secure data collection and cloud storage integration
+- **Stealth Operations**: Low-visibility testing capabilities with evasion techniques
+
+### 🔧 Module Categories
 
 ### Module Categories
 
-#### 1. Reconnaissance (`modules/recon/`)
-- **Cluster Reconnaissance**: Comprehensive Kubernetes cluster information gathering
-  - RBAC analysis
+#### 2. Reconnaissance (`modules/recon/`)
+- **Comprehensive Cluster Analysis**: Detailed Kubernetes environment assessment
+  - RBAC analysis and privilege mapping
   - Network policy enumeration
   - Service account discovery
   - Pod security context analysis
   - Node information gathering
-    
-#### 2. Cluster Exploitation (`modules/cluster_exploit/`)
+  - Cloud metadata analysis
+
+#### 3. OWASP Top 10 for Kubernetes (`modules/owasp_top10/`)
+- **K01 - Insecure Workload Configurations**: Detect dangerous security contexts
+- **K02 - Supply Chain Vulnerabilities**: Identify risky images and registries
+- **K03 - Overly Permissive RBAC**: Find escalation chains and risky bindings
+- **K04 - Lack of Policy Enforcement**: Detect missing OPA/Gatekeeper/Kyverno
+- **K05 - Inadequate Logging**: Find missing audit logs and monitoring gaps
+- **K06 - Broken Authentication**: Detect weak auth and exposed credentials
+- **K07 - Missing Network Segmentation**: Identify lack of NetworkPolicies
+- **K08 - Secrets Management Failures**: Find exposed secrets and weak encryption
+- **K09 - Misconfigured Components**: Detect webhook and controller issues
+- **K10 - Outdated Components**: Identify vulnerable Kubernetes versions
+
+#### 4. Exploitation Framework (`modules/exploitation/`)
+- **Payloads**: Generate and inject malicious payloads
+  - Reverse shells (bash, python, perl, php, nc)
+  - Web shells (PHP, JSP, ASP, Node.js)
+  - Privilege escalation payloads
+  - Data exfiltration tools
+- **Exploits**: Execute specific attack techniques
+  - RBAC escalation
+  - Container escape
+  - Kubelet hijacking
+  - ETCD injection
+  - Namespace pivoting
+- **Persistence**: Establish persistent access
+  - Sidecar persistence
+  - Cron-based persistence
+  - Service backdoors
+  - Volume persistence
+- **Post-Exploitation**: Data collection and lateral movement
+  - Credential harvesting
+  - System reconnaissance
+  - Lateral movement
+  - Privilege escalation
+- **Evasion**: Stealth and anti-detection techniques
+  - Anti-forensics
+  - Log manipulation
+  - Process hiding
+  - Network evasion
+- **Cloud Exploits**: Cloud-specific attack techniques
+  - AWS EKS exploitation
+  - Azure AKS exploitation
+  - GCP GKE exploitation
+  - Multi-cloud pivoting
+
+#### 5. Cluster Exploitation (`modules/cluster_exploit/`)
 - **ETCD Injection**: Direct pod injection via etcd
 - **Kubelet Exploitation**: Kubelet API exploitation and hijacking
 - **Sidecar Injection**: Pod sidecar container injection
 - **RBAC Escalation**: RBAC privilege escalation and permission analysis
 - **Namespace Pivot**: Cross-namespace access and privilege movement
 
-#### 3. Cloud Exploitation (`modules/multi_cloud/`)
+#### 6. Cloud Exploitation (`modules/multi_cloud/`)
 - **Metadata Hijacking**: Cloud metadata service exploitation
 - **Cloud Privilege Escalation**: Cloud IAM privilege escalation
 - **Assume Role Abuse**: Cloud role assumption and token abuse
 - **Cloud Elevator**: Automated cloud privilege escalation paths
 
-#### 4. Stealth Operations (`modules/stealth/`)
+#### 7. Stealth Operations (`modules/stealth/`)
 - **Audit Bypass**: Audit policy bypass testing and analysis
 - **DNS Cache Poisoning**: DNS cache poisoning and spoofing attacks
 - **Cleanup Operations**: Evidence removal and operation cleanup
-  - Log sanitization
-  - Resource cleanup
-  - Operation trace removal
-  - Evidence elimination
 
-#### 5. Out-of-Cluster Operations (`modules/out_cluster/`)
-- **Registry Backdoor**: Container registry exploitation and backdooring
+#### 8. Data Exfiltration (`modules/data_exfil/`)
+- **Secure Data Collection**: Collect and exfiltrate sensitive data
+- **Cloud Storage Integration**: Upload to AWS S3, GCP Storage, Azure Blob
+- **Presigned URL Support**: Secure data transfer without credentials
   - Image tampering
   - Credential theft
   - Supply chain attacks
 
-## Installation
+## 🚀 Quick Start
 
+### Prerequisites
+- Go 1.19+ installed
+- Kubernetes cluster access (for testing)
+- Cloud credentials (for lab deployment)
+
+### Installation
+
+**Option 1: Automated Build (Recommended)**
 ```bash
-# Install from source
-go get github.com/ashifly/KubeShadow
-
-# Build from source (automatically handles CGO issues)
+# Clone and build with automatic dependency handling
 git clone https://github.com/ashifly/KubeShadow
 cd KubeShadow
 make build
 ```
 
-**Or use the automated build script:**
+**Option 2: Manual Build**
 ```bash
-# One-command build (handles all dependencies automatically)
-./setup.sh
+# Clean build without CGO (fastest and most reliable)
+CGO_ENABLED=0 go build -ldflags="-s -w" -o kubeshadow .
+chmod +x kubeshadow
 ```
 
-## 🛠️ Troubleshooting Build Issues
-
-**Note:** The automated setup script (`./setup.sh`) and Makefile (`make build`) handle most build issues automatically. Only use manual troubleshooting if the automated methods fail.
-
-### Manual Build (if automated setup fails)
-
-**Quick Fix - Build without CGO:**
+### Verify Installation
 ```bash
-# This works on most systems
-CGO_ENABLED=0 go build -o kubeshadow .
-chmod +x kubeshadow
 ./kubeshadow help
 ```
 
-**Full Manual Build:**
-```bash
-# Install dependencies
-sudo apt update && sudo apt install -y libsqlite3-dev build-essential
+## 🎯 Usage Workflow
 
-# Clean and build
-go clean -modcache
-go mod tidy
-go build -o kubeshadow .
+### 1. Lab Setup
+```bash
+# Deploy vulnerable Kubernetes lab
+./kubeshadow lab create --provider aws --size small
+./kubeshadow lab create --provider gcp --size minimal
+./kubeshadow lab create --provider azure --size small
+./kubeshadow lab create --provider minikube
+```
+
+### 2. Reconnaissance
+```bash
+# Comprehensive cluster analysis
+./kubeshadow recon --dashboard
+
+# OWASP Top 10 security assessment
+./kubeshadow owasp --dashboard
+
+# Attack chain analysis
+./kubeshadow recon-graph --dashboard
+```
+
+### 3. Exploitation
+```bash
+# Metasploit-style exploitation framework
+./kubeshadow exploitation payloads list
+./kubeshadow exploitation exploits rbac-escalate --target-pod vulnerable-pod
+./kubeshadow exploitation persistence backdoor --method sidecar
+./kubeshadow exploitation cloud-exploits aws-iam-escalate --target-role my-role
+```
+
+### 4. Dashboard
+```bash
+# Start interactive dashboard with attack map
+./kubeshadow dashboard --port 8080
+```
+
+## 🎯 Command Structure
+
+KubeShadow follows a logical penetration testing workflow:
+
+### 🔧 Lab Setup
+- `lab` - Deploy vulnerable Kubernetes environments
+- `dashboard` - Start interactive web dashboard
+
+### 🔍 Reconnaissance  
+- `recon` - Comprehensive cluster analysis
+- `owasp` - OWASP Top 10 security assessment
+- `recon-graph` - Attack chain analysis
+
+### 🎯 Exploitation
+- `exploitation` - Metasploit-style framework
+  - `payloads` - Generate malicious payloads
+  - `exploits` - Execute specific attacks
+  - `persistence` - Establish persistent access
+  - `post-ex` - Post-exploitation activities
+  - `evasion` - Stealth and anti-detection
+  - `cloud-exploits` - Cloud-specific attacks
+- `rbac-escalate` - RBAC privilege escalation
+- `sidecar-inject` - Malicious sidecar injection
+- `kubeletjacker` - Kubelet API exploitation
+- `etcdinject` - Direct etcd injection
+- `namespace-pivot` - Cross-namespace access
+
+### ☁️ Cloud Exploitation
+- `metadata-hijack` - Cloud metadata exploitation
+- `cloud-elevator` - Cloud privilege escalation
+- `assume-role-abuse` - Cloud role assumption
+
+### 🔄 Post-Exploitation
+- `data-exfil` - Data exfiltration
+- `registry-backdoor` - Container registry attacks
+- `audit-bypass` - Audit policy bypass
+- `dns-poison` - DNS cache poisoning
+- `cleanup` - Evidence removal
+
+## 🌟 New Features
+
+### Interactive Dashboard
+- **Real-time Attack Map**: Visualize attack chains and relationships
+- **WebSocket Updates**: Live command results and graph updates
+- **Export Capabilities**: Download results as CSV, PDF, or graph formats
+- **Port Auto-Detection**: Automatically finds available ports
+
+### OWASP Top 10 Integration
+- **Automated Detection**: Scan for all OWASP Top 10 Kubernetes risks
+- **Risk Scoring**: CVSS-style severity assessment
+- **Remediation Guidance**: OPA/Gatekeeper policy suggestions
+- **Lab Integration**: Test scenarios in controlled environments
+
+### Exploitation Framework
+- **Metasploit-Style**: Familiar interface for penetration testers
+- **Payload Generation**: Multiple payload types and encoding options
+- **Persistence Mechanisms**: Various persistence techniques
+- **Cloud Exploitation**: Platform-specific attack modules
+
+### Lab Environment
+- **Multi-Cloud Support**: AWS, GCP, Azure, Minikube, Kind
+- **Vulnerable Workloads**: Pre-configured attack scenarios
+- **OWASP Scenarios**: Complete Top 10 vulnerability coverage
+- **Ephemeral Containers**: Advanced attack demonstrations
+
+## 🛠️ Build Troubleshooting
+
+**If build gets stuck at 40%:**
+```bash
+# Clean and rebuild without CGO
+make clean
+CGO_ENABLED=0 go build -ldflags="-s -w" -o kubeshadow .
 chmod +x kubeshadow
 ./kubeshadow help
 ```
