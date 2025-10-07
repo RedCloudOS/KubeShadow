@@ -93,9 +93,9 @@ func (gb *GraphBuilder) extractReconElements(_ *CommandResult, findings []Findin
 		// Create nodes for resources
 		if finding.Resource != "" {
 			node := GraphNode{
-				ID:   gb.generateNodeID(finding.Type, finding.Resource),
-				Type: gb.mapFindingTypeToNodeType(finding.Type),
-				Name: finding.Resource,
+				ID:        gb.generateNodeID(finding.Type, finding.Resource),
+				Type:      gb.mapFindingTypeToNodeType(finding.Type),
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
 					"severity":    finding.Severity,
@@ -140,12 +140,12 @@ func (gb *GraphBuilder) extractRBACElements(_ *CommandResult, findings []Finding
 		// Create service account nodes
 		if strings.Contains(finding.Type, "service-account") {
 			node := GraphNode{
-				ID:   gb.generateNodeID("service-account", finding.Resource),
-				Type: "service-account",
-				Name: finding.Resource,
+				ID:        gb.generateNodeID("service-account", finding.Resource),
+				Type:      "service-account",
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
+					"severity":  finding.Severity,
 					"riskScore": finding.RiskScore,
 				},
 			}
@@ -155,12 +155,12 @@ func (gb *GraphBuilder) extractRBACElements(_ *CommandResult, findings []Finding
 		// Create role nodes
 		if strings.Contains(finding.Type, "role") {
 			node := GraphNode{
-				ID:   gb.generateNodeID("role", finding.Resource),
-				Type: "role",
-				Name: finding.Resource,
+				ID:        gb.generateNodeID("role", finding.Resource),
+				Type:      "role",
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
+					"severity":  finding.Severity,
 					"riskScore": finding.RiskScore,
 				},
 			}
@@ -178,7 +178,7 @@ func (gb *GraphBuilder) extractRBACElements(_ *CommandResult, findings []Finding
 					Type:     "privilege-escalation",
 					Weight:   finding.RiskScore,
 					Metadata: map[string]interface{}{
-						"severity": finding.Severity,
+						"severity":    finding.Severity,
 						"description": finding.Description,
 					},
 				}
@@ -199,12 +199,12 @@ func (gb *GraphBuilder) extractNetworkElements(_ *CommandResult, findings []Find
 		// Create service nodes
 		if strings.Contains(finding.Type, "service") {
 			node := GraphNode{
-				ID:   gb.generateNodeID("service", finding.Resource),
-				Type: "service",
-				Name: finding.Resource,
+				ID:        gb.generateNodeID("service", finding.Resource),
+				Type:      "service",
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
+					"severity":  finding.Severity,
 					"riskScore": finding.RiskScore,
 				},
 			}
@@ -222,7 +222,7 @@ func (gb *GraphBuilder) extractNetworkElements(_ *CommandResult, findings []Find
 					Type:     "network",
 					Weight:   finding.RiskScore,
 					Metadata: map[string]interface{}{
-						"severity": finding.Severity,
+						"severity":    finding.Severity,
 						"description": finding.Description,
 					},
 				}
@@ -243,12 +243,12 @@ func (gb *GraphBuilder) extractSecretsElements(_ *CommandResult, findings []Find
 		// Create secret nodes
 		if strings.Contains(finding.Type, "secret") {
 			node := GraphNode{
-				ID:   gb.generateNodeID("secret", finding.Resource),
-				Type: "secret",
-				Name: finding.Resource,
+				ID:        gb.generateNodeID("secret", finding.Resource),
+				Type:      "secret",
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
+					"severity":  finding.Severity,
 					"riskScore": finding.RiskScore,
 					"sensitive": true,
 				},
@@ -267,9 +267,9 @@ func (gb *GraphBuilder) extractSecretsElements(_ *CommandResult, findings []Find
 					Type:     "access",
 					Weight:   finding.RiskScore,
 					Metadata: map[string]interface{}{
-						"severity": finding.Severity,
+						"severity":    finding.Severity,
 						"description": finding.Description,
-						"sensitive": true,
+						"sensitive":   true,
 					},
 				}
 				edges = append(edges, edge)
@@ -289,13 +289,13 @@ func (gb *GraphBuilder) extractWorkloadElements(_ *CommandResult, findings []Fin
 		// Create pod nodes
 		if strings.Contains(finding.Type, "pod") {
 			node := GraphNode{
-				ID:   gb.generateNodeID("pod", finding.Resource),
-				Type: "pod",
-				Name: finding.Resource,
+				ID:        gb.generateNodeID("pod", finding.Resource),
+				Type:      "pod",
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
-					"riskScore": finding.RiskScore,
+					"severity":   finding.Severity,
+					"riskScore":  finding.RiskScore,
 					"privileged": strings.Contains(finding.Description, "privileged"),
 				},
 			}
@@ -313,7 +313,7 @@ func (gb *GraphBuilder) extractWorkloadElements(_ *CommandResult, findings []Fin
 					Type:     "host-access",
 					Weight:   finding.RiskScore,
 					Metadata: map[string]interface{}{
-						"severity": finding.Severity,
+						"severity":    finding.Severity,
 						"description": finding.Description,
 					},
 				}
@@ -338,8 +338,8 @@ func (gb *GraphBuilder) extractCloudElements(_ *CommandResult, findings []Findin
 				Type: "cloud-resource",
 				Name: finding.Resource,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
-					"riskScore": finding.RiskScore,
+					"severity":      finding.Severity,
+					"riskScore":     finding.RiskScore,
 					"cloudProvider": gb.extractCloudProvider(finding),
 				},
 			}
@@ -357,7 +357,7 @@ func (gb *GraphBuilder) extractCloudElements(_ *CommandResult, findings []Findin
 					Type:     "cloud-permission",
 					Weight:   finding.RiskScore,
 					Metadata: map[string]interface{}{
-						"severity": finding.Severity,
+						"severity":    finding.Severity,
 						"description": finding.Description,
 					},
 				}
@@ -380,8 +380,8 @@ func (gb *GraphBuilder) extractGenericElements(cmd *CommandResult, findings []Fi
 		Type: "command",
 		Name: cmd.Command,
 		Metadata: map[string]interface{}{
-			"module": cmd.Module,
-			"status": cmd.Status,
+			"module":   cmd.Module,
+			"status":   cmd.Status,
 			"findings": len(findings),
 		},
 	}
@@ -391,12 +391,12 @@ func (gb *GraphBuilder) extractGenericElements(cmd *CommandResult, findings []Fi
 	for _, finding := range findings {
 		if finding.Resource != "" {
 			targetNode := GraphNode{
-				ID:   gb.generateNodeID("resource", finding.Resource),
-				Type: "resource",
-				Name: finding.Resource,
+				ID:        gb.generateNodeID("resource", finding.Resource),
+				Type:      "resource",
+				Name:      finding.Resource,
 				Namespace: finding.Namespace,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
+					"severity":  finding.Severity,
 					"riskScore": finding.RiskScore,
 				},
 			}
@@ -409,7 +409,7 @@ func (gb *GraphBuilder) extractGenericElements(cmd *CommandResult, findings []Fi
 				Type:     "discovered",
 				Weight:   finding.RiskScore,
 				Metadata: map[string]interface{}{
-					"severity": finding.Severity,
+					"severity":    finding.Severity,
 					"description": finding.Description,
 				},
 			}
@@ -448,7 +448,7 @@ func (gb *GraphBuilder) findAttackChains(graph *AttackGraph) []AttackChain {
 
 	// Find high-risk nodes (potential targets)
 	highRiskNodes := gb.getHighRiskNodes(graph)
-	
+
 	// Find entry points (pods, services, etc.)
 	entryPoints := gb.getEntryPoints(graph)
 
@@ -624,21 +624,21 @@ func (gb *GraphBuilder) findPath(graph *AttackGraph, source, target string) []st
 	// Simple BFS pathfinding
 	visited := make(map[string]bool)
 	queue := [][]string{{source}}
-	
+
 	for len(queue) > 0 {
 		path := queue[0]
 		queue = queue[1:]
-		
+
 		current := path[len(path)-1]
 		if current == target {
 			return path
 		}
-		
+
 		if visited[current] {
 			continue
 		}
 		visited[current] = true
-		
+
 		// Find edges from current node
 		for _, edge := range graph.Edges {
 			if edge.SourceID == current && !visited[edge.TargetID] {
@@ -647,7 +647,7 @@ func (gb *GraphBuilder) findPath(graph *AttackGraph, source, target string) []st
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -655,7 +655,7 @@ func (gb *GraphBuilder) calculateChainRisk(graph *AttackGraph, path []string) fl
 	if len(path) < 2 {
 		return 0.0
 	}
-	
+
 	totalRisk := 0.0
 	for i := 0; i < len(path)-1; i++ {
 		// Find edge between path[i] and path[i+1]
@@ -666,13 +666,13 @@ func (gb *GraphBuilder) calculateChainRisk(graph *AttackGraph, path []string) fl
 			}
 		}
 	}
-	
+
 	return totalRisk / float64(len(path)-1)
 }
 
 func (gb *GraphBuilder) buildChainSteps(graph *AttackGraph, path []string) []ChainStep {
 	var steps []ChainStep
-	
+
 	for i := 0; i < len(path)-1; i++ {
 		// Find edge between path[i] and path[i+1]
 		for _, edge := range graph.Edges {
@@ -691,7 +691,7 @@ func (gb *GraphBuilder) buildChainSteps(graph *AttackGraph, path []string) []Cha
 			}
 		}
 	}
-	
+
 	return steps
 }
 
@@ -700,7 +700,7 @@ func (gb *GraphBuilder) calculateChainConfidence(graph *AttackGraph, path []stri
 	if len(path) < 2 {
 		return 0.0
 	}
-	
+
 	confidence := 1.0
 	for i := 0; i < len(path)-1; i++ {
 		// Find edge between path[i] and path[i+1]
@@ -712,7 +712,7 @@ func (gb *GraphBuilder) calculateChainConfidence(graph *AttackGraph, path []stri
 			}
 		}
 	}
-	
+
 	return confidence
 }
 

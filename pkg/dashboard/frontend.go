@@ -15,10 +15,10 @@ type FrontendManager struct {
 // NewFrontendManager creates a new frontend manager
 func NewFrontendManager() *FrontendManager {
 	tmpl := template.New("dashboard")
-	
+
 	// Load the enhanced dashboard template
 	tmpl = template.Must(tmpl.Parse(enhancedDashboardHTML))
-	
+
 	return &FrontendManager{
 		templates: tmpl,
 	}
@@ -27,13 +27,13 @@ func NewFrontendManager() *FrontendManager {
 // ServeEnhancedDashboard serves the enhanced dashboard with attack-map
 func (fm *FrontendManager) ServeEnhancedDashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	
+
 	// Check if logo exists
 	logoExists := false
 	if _, err := os.Stat("logo.png"); err == nil {
 		logoExists = true
 	}
-	
+
 	data := map[string]interface{}{
 		"LogoExists": logoExists,
 		"Title":      "KubeShadow Enhanced Dashboard",

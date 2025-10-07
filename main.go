@@ -31,7 +31,18 @@ var rootCmd = &cobra.Command{
 	Use:   "kubeshadow",
 	Short: "KubeShadow - Kubernetes Security Testing Tool",
 	Long:  "A Kubernetes security testing tool for analyzing and exploiting cluster security misconfigurations",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Print the banner when the root command is run without arguments
+		banner.Print()
+		// Then show the help message
+		cmd.Help()
+	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Show banner for help and main commands
+		if cmd.Name() == "help" || cmd.Name() == "kubeshadow" {
+			banner.Print()
+		}
+
 		// Start dashboard if requested
 		dashboardFlag, _ := cmd.Flags().GetBool("dashboard")
 		dashboardPort, _ := cmd.Flags().GetInt("dashboard-port")
@@ -43,12 +54,6 @@ var rootCmd = &cobra.Command{
 				fmt.Printf("🚀 Enhanced Dashboard started with attack-map visualization\n")
 			}
 		}
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		// Print the banner when the root command is run without arguments
-		banner.Print()
-		// Then show the help message
-		cmd.Help()
 	},
 }
 

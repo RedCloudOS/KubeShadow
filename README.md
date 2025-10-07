@@ -64,6 +64,38 @@ cd KubeShadow
 go build -o kubeshadow
 ```
 
+## 🛠️ Troubleshooting Build Issues
+
+If `go build` gets stuck or you encounter issues, try these steps:
+
+### 1. Clean and Rebuild with Verbose Output
+```bash
+# Clean everything
+go clean -modcache
+go mod tidy
+
+# Build with verbose output to see where it gets stuck
+go build -o kubeshadow -v .
+```
+
+### 2. Alternative Build Methods
+```bash
+# Build without CGO (faster, if you don't need C-bindings)
+CGO_ENABLED=0 go build -o kubeshadow .
+
+# Build with optimizations
+go build -ldflags="-s -w" -o kubeshadow .
+```
+
+### 3. Check Dependencies
+```bash
+# Verify Go installation
+go version
+
+# Check if all dependencies are available
+go mod download
+```
+
 ## Quick Start
 
 1. Basic reconnaissance:
@@ -82,6 +114,208 @@ kubeshadow recon --k8s-only
 ```bash
 kubeshadow --help
 ```
+
+## 🧪 Creating a Lab Environment
+
+KubeShadow includes a comprehensive lab module that creates intentionally vulnerable Kubernetes environments for hands-on security practice. This is perfect for learning, testing, and demonstrating Kubernetes security concepts.
+
+### Prerequisites & Cloud Setup
+
+**Before deploying lab environments, configure your cloud credentials:**
+
+**AWS Setup:**
+```bash
+# Install AWS CLI and eksctl
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+# Install eksctl
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+sudo mv /tmp/eksctl /usr/local/bin
+
+# Configure AWS credentials
+aws configure
+# Enter your AWS Access Key ID, Secret Access Key, and region
+```
+
+**GCP Setup:**
+```bash
+# Install gcloud CLI
+curl https://sdk.cloud.google.com | bash
+exec -l $SHELL
+
+# Authenticate and set project
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+
+# Enable required APIs
+gcloud services enable container.googleapis.com
+gcloud services enable compute.googleapis.com
+```
+
+**Azure Setup:**
+```bash
+# Install Azure CLI
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+# Login and set subscription
+az login
+az account set --subscription "YOUR_SUBSCRIPTION_ID"
+
+# Create resource group (if needed)
+az group create --name kubeshadow-lab-rg --location eastus
+```
+
+**Local Environment Setup:**
+```bash
+# Install Docker
+sudo apt-get update
+sudo apt-get install docker.io
+sudo systemctl start docker
+sudo usermod -aG docker $USER
+
+# Install Minikube
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+# Install kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+```
+
+### Quick Lab Setup
+
+**Local Environment (Minikube):**
+```bash
+# Deploy complete lab environment
+./kubeshadow lab --provider minikube --dashboard
+
+# Run security reconnaissance
+./kubeshadow recon --dashboard
+
+# Clean up when done
+./kubeshadow lab cleanup
+```
+
+**Cloud Environment (AWS/GCP/Azure):**
+```bash
+# Deploy to AWS EKS (choose any region)
+./kubeshadow lab --provider aws --region us-west-2 --dashboard
+
+# Deploy to GCP GKE (choose any region)
+./kubeshadow lab --provider gcp --region us-central1 --dashboard
+
+# Deploy to Azure AKS (choose any region)
+./kubeshadow lab --provider azure --region eastus --dashboard
+
+# Clean up lab resources only (keeps cluster)
+./kubeshadow lab cleanup
+
+# Clean up lab resources AND delete entire cluster
+./kubeshadow lab cleanup --provider aws --confirm
+```
+
+### Lab Features
+
+The lab environment includes:
+- **Intentionally vulnerable configurations** for realistic testing
+- **Multiple attack scenarios** across different skill levels
+- **Dashboard integration** for real-time monitoring and visualization
+- **Automated cleanup** to prevent resource waste
+- **Educational scenarios** with step-by-step guides
+
+### Learning Paths
+
+**Beginner Level:**
+```bash
+# 1. Deploy lab
+./kubeshadow lab --provider minikube --dashboard
+
+# 2. Basic reconnaissance
+./kubeshadow recon --dashboard
+
+# 3. Identify vulnerabilities
+./kubeshadow recon --namespace kubeshadow-lab --dashboard
+
+# 4. Clean up lab resources (keeps cluster)
+./kubeshadow lab cleanup
+```
+
+**Intermediate Level:**
+```bash
+# 1. Deploy to cloud
+./kubeshadow lab --provider aws --dashboard
+
+# 2. Advanced reconnaissance
+./kubeshadow recon --dashboard
+
+# 3. RBAC exploitation
+./kubeshadow rbac-escalate --dashboard
+
+# 4. Container escape testing
+./kubeshadow sidecar-inject --dashboard
+
+# 5. Clean up lab resources (keeps cluster)
+./kubeshadow lab cleanup
+```
+
+**Advanced Level:**
+```bash
+# 1. Multi-environment testing
+./kubeshadow lab --provider aws --dashboard
+./kubeshadow recon --dashboard
+./kubeshadow lab cleanup --provider aws --confirm  # Deletes entire cluster
+
+# 2. Advanced exploitation
+./kubeshadow rbac-escalate --dashboard
+./kubeshadow kubelet-jack --dashboard
+
+# 3. Stealth techniques
+./kubeshadow audit-bypass --dashboard
+./kubeshadow dns-cache-poison --dashboard
+
+# 4. Clean up lab resources (keeps cluster)
+./kubeshadow lab cleanup
+```
+
+### Lab Vulnerabilities
+
+The lab includes intentionally vulnerable configurations:
+- **Privileged containers** with host access
+- **Overly permissive RBAC** roles and bindings
+- **Exposed secrets** in environment variables
+- **Host network access** for pods
+- **Weak network policies** with security gaps
+- **Default service accounts** with excessive permissions
+
+### Prerequisites
+
+**For Local Environments:**
+- Docker installed and running
+- Minikube or Kind
+- kubectl configured
+
+**For Cloud Providers:**
+- Cloud credentials configured (see Prerequisites & Cloud Setup section above)
+- AWS CLI and eksctl (for AWS)
+- gcloud CLI (for GCP) 
+- Azure CLI (for Azure)
+
+### Dashboard Integration
+
+The lab integrates seamlessly with the KubeShadow dashboard:
+```bash
+# Start dashboard
+./kubeshadow dashboard
+
+# Access at http://localhost:8080
+# View real-time command execution and results
+# Export findings as CSV or PDF
+```
+
+For detailed lab documentation, see [modules/lab/README.md](modules/lab/README.md).
 
 ## Common Usage Patterns
 
