@@ -9,20 +9,23 @@ all: build
 # Build with automatic CGO detection and fallback
 build:
 	@echo "🔨 Building KubeShadow..."
-	@echo "📦 Checking dependencies..."
+	@echo "📦 Checking dependencies... (10%)"
 	@go mod tidy
-	@echo "🧹 Cleaning previous builds..."
+	@echo "🧹 Cleaning previous builds... (20%)"
 	@go clean -cache
-	@echo "🔧 Attempting build with CGO..."
+	@echo "🔧 Attempting build with CGO... (30%)"
+	@echo "⏳ Compiling Go modules... (40%)"
 	@if go build -o kubeshadow . 2>/dev/null; then \
-		echo "✅ Build successful with CGO"; \
+		echo "✅ Build successful with CGO (100%)"; \
 	else \
-		echo "⚠️  CGO build failed, trying without CGO..."; \
+		echo "⚠️  CGO build failed, trying without CGO... (50%)"; \
+		echo "⏳ Compiling without CGO... (70%)"; \
 		CGO_ENABLED=0 go build -o kubeshadow .; \
-		echo "✅ Build successful without CGO"; \
+		echo "✅ Build successful without CGO (100%)"; \
 	fi
+	@echo "🔧 Making executable... (90%)"
 	@chmod +x kubeshadow
-	@echo "🎉 KubeShadow built successfully!"
+	@echo "🎉 KubeShadow built successfully! (100%)"
 	@echo "💡 Run './kubeshadow help' to get started"
 
 # Build without CGO (faster, more reliable)

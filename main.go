@@ -6,11 +6,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/pflag"
 	// Import specific module sub-packages
 	cluster_exploit "kubeshadow/modules/cluster_exploit"
 	dashboard_cmd "kubeshadow/modules/dashboard"
 	data_exfil "kubeshadow/modules/data_exfil"
 	demo "kubeshadow/modules/demo"
+	exploitation "kubeshadow/modules/exploitation"
 	lab "kubeshadow/modules/lab"
 	multi_cloud "kubeshadow/modules/multi_cloud"
 	out_cluster "kubeshadow/modules/out_cluster"
@@ -62,26 +64,93 @@ func init() {
 	rootCmd.PersistentFlags().Bool("dashboard", false, "Enable dashboard to display command results on web interface")
 	rootCmd.PersistentFlags().Int("dashboard-port", 8080, "Port for the dashboard web server")
 
-	// Add all available commands from their new packages
-	rootCmd.AddCommand(cluster_exploit.EtcdInjectCmd)
-	rootCmd.AddCommand(cluster_exploit.KubeletJackerCmd)
+	// Add commands in logical workflow order with proper grouping
+
+	// 1. LAB SETUP (First - create environment)
+	rootCmd.AddCommand(lab.LabCmd)
+	rootCmd.AddCommand(dashboard_cmd.DashboardCmd)
+
+	// 2. RECONNAISSANCE (Discover vulnerabilities)
 	rootCmd.AddCommand(recon.ReconCmd)
+	rootCmd.AddCommand(owasp_top10.OwaspCmd)
+	rootCmd.AddCommand(recon_graph.ReconGraphCmd)
+
+	// 3. EXPLOITATION (Attack what you found)
+	rootCmd.AddCommand(exploitation.ExploitationCmd)
+	rootCmd.AddCommand(cluster_exploit.RBACEscalateCmd)
 	rootCmd.AddCommand(cluster_exploit.SidecarInjectCmd)
+	rootCmd.AddCommand(cluster_exploit.KubeletJackerCmd)
+	rootCmd.AddCommand(cluster_exploit.EtcdInjectCmd)
+	rootCmd.AddCommand(cluster_exploit.NamespacePivotCmd)
+
+	// 4. CLOUD EXPLOITATION (Cloud-specific attacks)
 	rootCmd.AddCommand(multi_cloud.MetadataHijackCmd)
 	rootCmd.AddCommand(multi_cloud.CloudElevatorCmd)
 	rootCmd.AddCommand(multi_cloud.AssumeRoleAbuseCmd)
-	rootCmd.AddCommand(cluster_exploit.RBACEscalateCmd)
+
+	// 5. POST-EXPLOITATION (Persistence, data exfil, cleanup)
+	rootCmd.AddCommand(data_exfil.DataExfilCmd)
+	rootCmd.AddCommand(out_cluster.RegistryBackdoorCmd)
 	rootCmd.AddCommand(stealth.AuditBypassCmd)
 	rootCmd.AddCommand(stealth.DNSCachePoisonCmd)
 	rootCmd.AddCommand(stealth.CleanupCmd)
-	rootCmd.AddCommand(cluster_exploit.NamespacePivotCmd)
-	rootCmd.AddCommand(out_cluster.RegistryBackdoorCmd)
-	rootCmd.AddCommand(dashboard_cmd.DashboardCmd)
+
+	// 6. UTILITIES (Demo and other tools)
 	rootCmd.AddCommand(demo.DemoCmd)
-	rootCmd.AddCommand(data_exfil.DataExfilCmd)
-	rootCmd.AddCommand(lab.LabCmd)
-	rootCmd.AddCommand(owasp_top10.OwaspCmd)
-	rootCmd.AddCommand(recon_graph.ReconGraphCmd)
+
+	// Override the help command to show logical order
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		fmt.Println("A Kubernetes security testing tool for analyzing and exploiting cluster security misconfigurations")
+		fmt.Println("")
+		fmt.Println("Usage:")
+		fmt.Printf("  %s [flags]\n", cmd.CommandPath())
+		fmt.Printf("  %s [command]\n", cmd.CommandPath())
+		fmt.Println("")
+		fmt.Println("Available Commands:")
+		fmt.Println("")
+		fmt.Println("🔧 LAB SETUP:")
+		fmt.Println("  lab               Deploy KubeShadow lab environment for security testing")
+		fmt.Println("  dashboard         Start the KubeShadow web dashboard")
+		fmt.Println("")
+		fmt.Println("🔍 RECONNAISSANCE:")
+		fmt.Println("  recon             Perform comprehensive cluster, cloud, and system reconnaissance")
+		fmt.Println("  owasp             OWASP Top 10 for Kubernetes Security")
+		fmt.Println("  recon-graph       Recon Graph and Attack Chain Analysis")
+		fmt.Println("")
+		fmt.Println("🎯 EXPLOITATION:")
+		fmt.Println("  exploitation      KubeShadow Exploitation Framework - Metasploit-style modules")
+		fmt.Println("  rbac-escalate     Attempt to escalate privileges using RBAC misconfigurations")
+		fmt.Println("  sidecar-inject    Inject a malicious sidecar container into a pod")
+		fmt.Println("  kubeletjacker     Exploit misconfigured or open kubelet APIs for pod access, logs, and potential RCE")
+		fmt.Println("  etcdinject        Inject a pod directly via etcd (dangerous)")
+		fmt.Println("  namespace-pivot   Analyze namespace isolation and pivot opportunities")
+		fmt.Println("")
+		fmt.Println("☁️  CLOUD EXPLOITATION:")
+		fmt.Println("  metadata-hijack   Attempt to hijack cloud metadata service credentials")
+		fmt.Println("  cloud-elevator   Attempt to elevate privileges in cloud environments")
+		fmt.Println("  assume-role-abuse Attempt to assume an AWS IAM role")
+		fmt.Println("")
+		fmt.Println("🔄 POST-EXPLOITATION:")
+		fmt.Println("  data-exfil        Exfiltrate data to cloud storage using presigned URLs")
+		fmt.Println("  registry-backdoor Inject a backdoor into a Docker image and push it")
+		fmt.Println("  audit-bypass      Analyze and test Kubernetes audit policy bypasses")
+		fmt.Println("  dns-poison        Test for DNS cache poisoning vulnerabilities")
+		fmt.Println("  cleanup           Clean up artifacts from penetration testing activities")
+		fmt.Println("")
+		fmt.Println("🛠️  UTILITIES:")
+		fmt.Println("  demo              Demo command to test dashboard functionality")
+		fmt.Println("  help              Help about any command")
+		fmt.Println("")
+		fmt.Println("Flags:")
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+			if flag.Hidden {
+				return
+			}
+			fmt.Printf("      --%-15s %s\n", flag.Name, flag.Usage)
+		})
+		fmt.Println("")
+		fmt.Printf("Use \"%s [command] --help\" for more information about a command.\n", cmd.CommandPath())
+	})
 
 	// Enable dashboard integration for all modules
 	enableDashboardIntegration(rootCmd)
@@ -157,6 +226,12 @@ func getModuleName(cmd *cobra.Command) string {
 		"k02":               "k02-supply-chain",
 		"k03":               "k03-rbac",
 		"k04":               "k04-policy",
+		"exploitation":      "exploitation",
+		"payloads":          "exploitation",
+		"exploits":          "exploitation",
+		"persistence":       "exploitation",
+		"post-ex":           "exploitation",
+		"evasion":           "exploitation",
 	}
 
 	if module, exists := moduleMap[cmd.Name()]; exists {

