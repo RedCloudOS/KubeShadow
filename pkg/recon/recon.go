@@ -100,3 +100,25 @@ func CloudRecon(ctx context.Context, stealth bool) error {
 
 	return nil
 }
+
+// ComprehensiveRecon performs comprehensive security reconnaissance
+func ComprehensiveRecon(ctx context.Context, kubeconfig string, stealth bool) error {
+	fmt.Println("[ComprehensiveRecon] Starting comprehensive security scan...")
+
+	// Perform comprehensive security scan
+	result, err := ComprehensiveSecurityScan(ctx, kubeconfig)
+	if err != nil {
+		return fmt.Errorf("failed to perform comprehensive security scan: %v", err)
+	}
+
+	// Print comprehensive scan results
+	PrintComprehensiveScanResults(result)
+
+	// Additional stealth checks if in stealth mode
+	if stealth {
+		fmt.Println("[ComprehensiveRecon] Stealth mode: limiting detailed output")
+		fmt.Printf("[ComprehensiveRecon] Found %d total vulnerabilities\n", result.TotalVulnerabilities)
+	}
+
+	return nil
+}

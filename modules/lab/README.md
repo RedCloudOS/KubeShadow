@@ -118,6 +118,10 @@ modules/lab/
 ├── README.md                    # This documentation
 ├── lab.go                      # Main lab deployment logic
 ├── cleanup.go                  # Lab cleanup functionality
+├── docs/                       # Lab documentation
+│   ├── kubernetes-goat-scenarios.md # New lab scenarios
+│   ├── lab-exercises-comprehensive.md # Comprehensive exercises
+│   └── ...                    # Other documentation
 └── manifests/                  # All lab YAML files
     ├── 01-namespace.yaml       # Lab namespaces
     ├── 02-rbac.yaml           # RBAC configurations
@@ -127,6 +131,11 @@ modules/lab/
     ├── 06-configmaps.yaml     # Configuration data
     ├── 07-network-policies.yaml # Network policies
     ├── 08-persistent-volumes.yaml # Storage configurations
+    ├── 17-ssrf-vulnerability.yaml # SSRF testing
+    ├── 18-container-escape.yaml # Container escape testing
+    ├── 19-supply-chain-attack.yaml # Supply chain testing
+    ├── 20-crypto-miner.yaml   # Crypto mining testing
+    ├── 21-dns-poisoning.yaml  # DNS poisoning testing
     ├── setup.sh               # Manual setup script
     ├── cleanup.sh             # Manual cleanup script
     └── LAB_README.md          # Lab environment documentation
@@ -136,6 +145,13 @@ modules/lab/
 - **`kubeshadow-lab`** - Main lab namespace with vulnerable applications
 - **`kubeshadow-secrets`** - Namespace containing sensitive data
 - **`kubeshadow-monitoring`** - Monitoring and logging namespace
+
+### 🆕 New Kubernetes Goat Style Scenarios
+- **`ssrf-lab`** - SSRF (Server-Side Request Forgery) testing namespace
+- **`container-escape-lab`** - Container escape vulnerability testing namespace
+- **`supply-chain-lab`** - Supply chain attack simulation namespace
+- **`crypto-miner-lab`** - Crypto mining attack simulation namespace
+- **`dns-poisoning-lab`** - DNS poisoning attack simulation namespace
 
 ### 🚀 Pods & Applications
 - **Privileged containers** with host access capabilities
@@ -187,7 +203,12 @@ modules/lab/
 # 3. Identify vulnerabilities
 ./kubeshadow recon --namespace kubeshadow-lab --dashboard
 
-# 4. Clean up
+# 4. Test new lab scenarios
+kubectl apply -f modules/lab/manifests/17-ssrf-vulnerability.yaml
+kubectl apply -f modules/lab/manifests/20-crypto-miner.yaml
+kubectl apply -f modules/lab/manifests/21-dns-poisoning.yaml
+
+# 5. Clean up
 ./kubeshadow lab cleanup
 ```
 
@@ -205,10 +226,14 @@ modules/lab/
 # 4. Container escape testing
 ./kubeshadow sidecar-inject --dashboard
 
-# 5. Data exfiltration
+# 5. Test advanced lab scenarios
+kubectl apply -f modules/lab/manifests/18-container-escape.yaml
+kubectl apply -f modules/lab/manifests/19-supply-chain-attack.yaml
+
+# 6. Data exfiltration
 ./kubeshadow data-exfil --presigned-url "YOUR_URL" --dashboard
 
-# 6. Clean up
+# 7. Clean up
 ./kubeshadow lab cleanup --provider aws
 ```
 
@@ -223,16 +248,23 @@ modules/lab/
 ./kubeshadow recon --dashboard
 ./kubeshadow lab cleanup
 
-# 2. Advanced exploitation techniques
+# 2. Deploy all new lab scenarios
+kubectl apply -f modules/lab/manifests/17-ssrf-vulnerability.yaml
+kubectl apply -f modules/lab/manifests/18-container-escape.yaml
+kubectl apply -f modules/lab/manifests/19-supply-chain-attack.yaml
+kubectl apply -f modules/lab/manifests/20-crypto-miner.yaml
+kubectl apply -f modules/lab/manifests/21-dns-poisoning.yaml
+
+# 3. Advanced exploitation techniques
 ./kubeshadow rbac-escalate --dashboard
 ./kubeshadow sidecar-inject --dashboard
 ./kubeshadow kubelet-jack --dashboard
 
-# 3. Stealth techniques
+# 4. Stealth techniques
 ./kubeshadow audit-bypass --dashboard
 ./kubeshadow dns-cache-poison --dashboard
 
-# 4. Comprehensive data collection
+# 5. Comprehensive data collection
 ./kubeshadow data-exfil --presigned-url "YOUR_URL" --export-recon --dashboard
 ```
 

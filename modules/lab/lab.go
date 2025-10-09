@@ -428,9 +428,17 @@ func deployLabManifests() error {
 		"08-persistent-volumes.yaml",
 		"09-ephemeral-containers.yaml",
 		"10-secure-ephemeral.yaml",
+		"11-ephemeral-attack-scenarios.yaml",
+		"12-advanced-vulnerabilities.yaml",
 		"13-chroot-escape.yaml",
 		"14-secure-chroot.yaml",
 		"15-highly-vulnerable.yaml",
+		"16-owasp-comprehensive.yaml",
+		"17-ssrf-vulnerability.yaml",
+		"18-container-escape.yaml",
+		"19-supply-chain-attack.yaml",
+		"20-crypto-miner.yaml",
+		"21-dns-poisoning.yaml",
 	}
 
 	for _, file := range yamlFiles {
