@@ -189,15 +189,15 @@ kubectl delete -f 21-dns-poisoning.yaml
 ./kubeshadow dashboard
 
 # Run reconnaissance on specific labs
-./kubeshadow recon --namespace ssrf-lab --dashboard
-./kubeshadow recon --namespace container-escape-lab --dashboard
-./kubeshadow recon --namespace supply-chain-lab --dashboard
-./kubeshadow recon --namespace crypto-miner-lab --dashboard
-./kubeshadow recon --namespace dns-poisoning-lab --dashboard
+./kubeshadow recon --namespace ssrf-lab
+./kubeshadow recon --namespace container-escape-lab 
+./kubeshadow recon --namespace supply-chain-lab 
+./kubeshadow recon --namespace crypto-miner-lab 
+./kubeshadow recon --namespace dns-poisoning-lab 
 
 # Test specific attack vectors
-./kubeshadow sidecar-inject --namespace container-escape-lab --dashboard
-./kubeshadow data-exfil --presigned-url "YOUR_URL" --dashboard
+./kubeshadow sidecar-inject --namespace container-escape-lab 
+./kubeshadow data-exfil --presigned-url "YOUR_URL" 
 ```
 
 ### Manual Testing
@@ -235,53 +235,4 @@ kubectl exec -it dns-cache-poisoning -n dns-poisoning-lab -- /bin/sh
 - Regular cleanup of unused resources
 - Document findings for learning purposes
 
-
-## 🎯 Use Cases
-
-### Educational Institutions
-- Security courses with hands-on lab environments
-- Research projects requiring isolated testing environments
-- Student exercises with guided scenarios
-- Instructor demonstrations with real-time monitoring
-
-### Corporate Training
-- Security awareness training for development teams
-- Red team exercises with controlled environments
-- Compliance testing with realistic scenarios
-- Incident response practice with vulnerable configurations
-
-### Security Professionals
-- Penetration testing practice with Kubernetes
-- Vulnerability research in controlled environments
-- Tool development and testing
-- Certification preparation for security exams
-
-## 🤝 Contributing
-
-We welcome contributions to improve the lab scenarios:
-
-1. **Report issues** with lab deployments
-2. **Suggest new scenarios** for educational value
-3. **Improve documentation** and examples
-4. **Add new attack vectors** or vulnerabilities
-5. **Enhance security configurations** for realistic testing
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](../../LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Kubernetes Goat** for the excellent educational methodology
-- **Kubernetes community** for the excellent platform
-- **Security researchers** who identified the vulnerabilities we simulate
-- **Educational institutions** that provided feedback on lab scenarios
-- **Open source contributors** who made this project possible
-
----
-
 **Happy Learning! 🚀**
-
-The KubeShadow Lab scenarios provide endless possibilities for Kubernetes security learning. Experiment, explore, and always practice responsibly!
-
-For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/kubeshadow/kubeshadow).

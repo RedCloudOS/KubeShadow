@@ -1,5 +1,4 @@
 # Crypto Miner Vulnerability Lab
-# Based on Kubernetes Goat scenario patterns
 apiVersion: v1
 kind: Namespace
 metadata:
