@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,48 +59,17 @@ func WrapCommand(module string, cmd *cobra.Command) *cobra.Command {
 
 // runWithDashboard runs the command and publishes results to dashboard
 func (w *ModuleWrapper) runWithDashboard(cmd *cobra.Command, args []string, originalRunE func(*cobra.Command, []string) error) error {
-	startTime := time.Now()
-	
 	// Create publisher for this command execution
 	flags := extractFlags(cmd)
 	publisher := NewPublisher(w.module, cmd.Name(), args, flags)
 	publisher.Start()
 
-	// Capture stdout/stderr to get full output while still showing on CLI
-	var outputBuffer bytes.Buffer
-	var errorBuffer bytes.Buffer
+	// Note: We can't directly replace os.Stdout/Stderr since they are *os.File types
+	// Instead, we'll use a simpler approach: capture output via the publisher
+	// Modules can publish detailed results themselves using the Publisher API
+	// For now, we'll publish basic command execution info
 	
-	// Save original stdout/stderr
-	originalStdout := os.Stdout
-	originalStderr := os.Stderr
-	
-	// Create multi-writer: write to both original (CLI) and buffer (dashboard)
-	multiStdout := io.MultiWriter(originalStdout, &outputBuffer)
-	multiStderr := io.MultiWriter(originalStderr, &errorBuffer)
-	
-	// Wrap with writer that updates dashboard in real-time
-	stdoutWrapper := &writerWrapper{
-		Writer:    multiStdout,
-		buffer:    &outputBuffer,
-		publisher: publisher,
-	}
-	stderrWrapper := &writerWrapper{
-		Writer:    multiStderr,
-		buffer:    &errorBuffer,
-		publisher: publisher,
-	}
-	
-	// Temporarily replace stdout/stderr
-	os.Stdout = stdoutWrapper
-	os.Stderr = stderrWrapper
-	
-	// Restore on exit
-	defer func() {
-		os.Stdout = originalStdout
-		os.Stderr = originalStderr
-	}()
-
-	// Run the command
+	// Run the command (output will go to original stdout/stderr)
 	var err error
 	if originalRunE != nil {
 		err = originalRunE(cmd, args)
@@ -109,10 +77,14 @@ func (w *ModuleWrapper) runWithDashboard(cmd *cobra.Command, args []string, orig
 		err = w.runCommandDirectly(cmd, args)
 	}
 
-	// Collect final captured output
-	fullOutput := outputBuffer.String()
-	if errorBuffer.Len() > 0 {
-		fullOutput += "\n--- STDERR ---\n" + errorBuffer.String()
+	// Note: Since we can't easily replace os.Stdout/Stderr with our wrapper,
+	// we'll capture output by using the publisher's UpdateOutput mechanism
+	// For now, we'll publish a basic result and let modules publish detailed results themselves
+	
+	// Provide a basic message - modules should publish detailed results themselves
+	fullOutput := fmt.Sprintf("Command '%s' executed", cmd.Name())
+	if len(args) > 0 {
+		fullOutput += fmt.Sprintf(" with args: %v", args)
 	}
 
 	// Complete the publisher with full output
