@@ -1,0 +1,55 @@
+
+<svg width="600" height="1200" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Box 1 -->
+  <rect x="150" y="20" width="300" height="70" rx="10" ry="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="300" y="60" font-size="16" text-anchor="middle">Compromised Pod</text>
+
+  <!-- Arrow 1 -->
+  <line x1="300" y1="90" x2="300" y2="130" stroke="black" stroke-width="2"/>
+  <polygon points="295,130 305,130 300,140" fill="black"/>
+
+  <!-- Box 2 -->
+  <rect x="150" y="140" width="300" height="90" rx="10" ry="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="300" y="170" font-size="16" text-anchor="middle">Access Azure WireServer</text>
+  <text x="300" y="195" font-size="14" text-anchor="middle">(metadata endpoint)</text>
+
+  <!-- Arrow 2 -->
+  <line x1="300" y1="230" x2="300" y2="260" stroke="black" stroke-width="2"/>
+  <polygon points="295,260 305,260 300,270" fill="black"/>
+
+  <!-- Box 3 -->
+  <rect x="150" y="270" width="300" height="70" rx="10" ry="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="300" y="310" font-size="16" text-anchor="middle">Retrieve Encrypted Provisioning Script</text>
+
+  <!-- Arrow 3 -->
+  <line x1="300" y1="340" x2="300" y2="370" stroke="black" stroke-width="2"/>
+  <polygon points="295,370 305,370 300,380" fill="black"/>
+
+  <!-- Box 4 -->
+  <rect x="150" y="380" width="300" height="70" rx="10" ry="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="300" y="420" font-size="16" text-anchor="middle">Decrypt Using TenantEncryptionCert</text>
+
+  <!-- Arrow 4 -->
+  <line x1="300" y1="450" x2="300" y2="480" stroke="black" stroke-width="2"/>
+  <polygon points="295,480 305,480 300,490" fill="black"/>
+
+  <!-- Box 5 -->
+  <rect x="150" y="490" width="300" height="140" rx="10" ry="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="300" y="525" font-size="16" text-anchor="middle">Extract Node TLS Materials</text>
+  <text x="300" y="555" font-size="14" text-anchor="middle">• kubelet crt/key</text>
+  <text x="300" y="575" font-size="14" text-anchor="middle">• cluster ca crt</text>
+  <text x="300" y="595" font-size="14" text-anchor="middle">• TLS bootstrap token</text>
+
+  <!-- Arrow 5 -->
+  <line x1="300" y1="630" x2="300" y2="660" stroke="black" stroke-width="2"/>
+  <polygon points="295,660 305,660 300,670" fill="black"/>
+
+  <!-- Box 6 -->
+  <rect x="150" y="670" width="300" height="140" rx="10" ry="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="300" y="705" font-size="16" text-anchor="middle">Privilege Escalation</text>
+  <text x="300" y="735" font-size="14" text-anchor="middle">• authenticate as kubelet</text>
+  <text x="300" y="755" font-size="14" text-anchor="middle">• register malicious nodes</text>
+  <text x="300" y="775" font-size="14" text-anchor="middle">• retrieve cluster secrets</text>
+
+</svg>
