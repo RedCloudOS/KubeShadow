@@ -53,6 +53,23 @@ Examples:
 			return fmt.Errorf("failed to get region flag: %w", err)
 		}
 
+		// Set provider-specific defaults if region not provided
+		if region == "" {
+			switch provider {
+			case "aws":
+				region = "us-west-2"
+			case "gcp":
+				region = "us-west2"
+			case "azure":
+				region = "eastus"
+			}
+		}
+
+		// Normalize GCP region format (convert us-west-2 to us-west2)
+		if provider == "gcp" {
+			region = normalizeGCPRegion(region)
+		}
+
 		clusterName, err := cmd.Flags().GetString("cluster-name")
 		if err != nil {
 			return fmt.Errorf("failed to get cluster-name flag: %w", err)
@@ -111,7 +128,7 @@ Examples:
 
 func init() {
 	LabCmd.Flags().String("provider", "minikube", "Cloud provider or local environment (aws, gcp, azure, minikube, kind, local)")
-	LabCmd.Flags().String("region", "us-west-2", "Cloud region (for cloud providers)")
+	LabCmd.Flags().String("region", "", "Cloud region (for cloud providers). Defaults: aws=us-west-2, gcp=us-west2, azure=eastus")
 	LabCmd.Flags().String("cluster-name", "kubeshadow-lab", "Name for the Kubernetes cluster")
 	LabCmd.Flags().Bool("skip-auth", false, "Skip cloud authentication (use existing credentials)")
 	LabCmd.Flags().String("cluster-size", "minimal", "Cluster size: minimal (1 node, 20GB), small (2 nodes, 50GB), medium (3 nodes, 100GB)")
@@ -123,19 +140,52 @@ func init() {
 
 // authenticateCloudProvider handles cloud provider authentication
 func authenticateCloudProvider(provider string) error {
+	// Check if running in a headless environment (SSH, PuTTY, WSL, etc.)
+	isHeadless := os.Getenv("SSH_CONNECTION") != "" || 
+		os.Getenv("SSH_CLIENT") != "" || 
+		os.Getenv("SSH_TTY") != "" ||
+		os.Getenv("TERM") == "dumb" ||
+		os.Getenv("DISPLAY") == ""
+
 	switch provider {
 	case "aws":
 		fmt.Println("   Run: aws configure")
 		fmt.Println("   Or: aws sso login")
+		if isHeadless {
+			fmt.Println("   Note: For headless environments, ensure AWS credentials are configured via:")
+			fmt.Println("         - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)")
+			fmt.Println("         - ~/.aws/credentials file")
+			fmt.Println("         - IAM instance profile (if running on EC2)")
+		}
 		fmt.Print("   Press Enter when authenticated...")
 		fmt.Scanln()
 	case "gcp":
-		fmt.Println("   Run: gcloud auth login")
-		fmt.Println("   And: gcloud auth application-default login")
+		if isHeadless {
+			fmt.Println("   For headless environments (SSH/PuTTY/WSL), use:")
+			fmt.Println("   Run: gcloud auth login --no-launch-browser")
+			fmt.Println("        (Copy the URL to your local browser and paste the authorization code)")
+			fmt.Println("   And: gcloud auth application-default login --no-launch-browser")
+			fmt.Println("")
+			fmt.Println("   Alternative: Use service account key file:")
+			fmt.Println("   Run: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json")
+			fmt.Println("   Or:  gcloud auth activate-service-account --key-file=/path/to/key.json")
+		} else {
+			fmt.Println("   Run: gcloud auth login")
+			fmt.Println("   And: gcloud auth application-default login")
+		}
 		fmt.Print("   Press Enter when authenticated...")
 		fmt.Scanln()
 	case "azure":
-		fmt.Println("   Run: az login")
+		if isHeadless {
+			fmt.Println("   For headless environments (SSH/PuTTY/WSL), use:")
+			fmt.Println("   Run: az login --use-device-code")
+			fmt.Println("        (Use the device code shown to authenticate via browser)")
+			fmt.Println("")
+			fmt.Println("   Alternative: Use service principal:")
+			fmt.Println("   Run: az login --service-principal -u <app-id> -p <password> --tenant <tenant-id>")
+		} else {
+			fmt.Println("   Run: az login")
+		}
 		fmt.Print("   Press Enter when authenticated...")
 		fmt.Scanln()
 	}
@@ -240,7 +290,8 @@ func deployGCPLab(region, clusterName, clusterSize string, useSpot bool) error {
 	fmt.Printf("📊 Nodes: %d, Disk: %s, Machine: %s\n", config.NumNodes, config.DiskSize, config.MachineType)
 
 	// Use zonal cluster for minimal configuration (fastest, avoids SSD quota)
-	zone := region + "-b" // Use zone b for the region (e.g., us-east1-b)
+	// GCP regions are formatted like "us-west2", zones are like "us-west2-b"
+	zone := region + "-b" // Use zone b for the region (e.g., us-west2-b)
 
 	// Create GKE cluster with minimal zonal configuration
 	args := []string{
@@ -572,6 +623,25 @@ func getGCPClusterConfig(clusterSize string, useSpot bool) ClusterConfig {
 	}
 
 	return config
+}
+
+// normalizeGCPRegion converts AWS-style region format to GCP format
+// e.g., "us-west-2" -> "us-west2", "us-east-1" -> "us-east1"
+func normalizeGCPRegion(region string) string {
+	// GCP regions don't have a dash before the number
+	// Pattern: convert "us-west-2" to "us-west2"
+	// This handles common cases like us-west-2, us-east-1, etc.
+	if strings.Contains(region, "-") {
+		parts := strings.Split(region, "-")
+		if len(parts) >= 3 {
+			// Last part is the number, combine everything before it
+			// e.g., ["us", "west", "2"] -> "us-west2"
+			prefix := strings.Join(parts[:len(parts)-1], "-")
+			suffix := parts[len(parts)-1]
+			region = prefix + suffix
+		}
+	}
+	return region
 }
 
 // getAWSClusterConfig returns AWS-specific cluster configuration
