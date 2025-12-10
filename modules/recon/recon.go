@@ -244,7 +244,7 @@ var ReconCmd = &cobra.Command{
 
 func init() {
 	ReconCmd.Flags().String("kubeconfig", "~/.kube/config", "Path to the kubeconfig file")
-	ReconCmd.Flags().Bool("stealth", true, "Enable stealth mode (minimal API calls)")
+	ReconCmd.Flags().Bool("stealth", false, "Enable stealth mode (minimal API calls, less detailed output)")
 	ReconCmd.Flags().Bool("cloud-only", false, "Perform only cloud metadata recon")
 	ReconCmd.Flags().Bool("k8s-only", false, "Perform only Kubernetes API recon")
 	ReconCmd.Flags().Bool("show-rbac", false, "Show detailed RBAC analysis (RoleBindings and ClusterRoleBindings)")

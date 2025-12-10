@@ -254,14 +254,42 @@ func K8sRecon(ctx context.Context, kubeconfigPath string, stealth bool, showRBAC
 		fmt.Printf("✅ Found %d namespaces\n", len(namespaces.Items))
 		for _, ns := range namespaces.Items {
 			fmt.Printf("   • %s\n", ns.Name)
-			if !stealth {
-				// List pods in namespace
-				pods, err := clientset.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					fmt.Printf("     ❌ Failed to list pods: %v\n", err)
-					continue
+			
+			// Always show pod count and names (even in stealth mode)
+			pods, err := clientset.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
+			if err == nil {
+				fmt.Printf("     📦 Pods: %d\n", len(pods.Items))
+				// Show pod names even in stealth mode
+				for _, pod := range pods.Items {
+					status := string(pod.Status.Phase)
+					fmt.Printf("       • %s (%s)\n", pod.Name, status)
 				}
-				fmt.Printf("     Pods: %d\n", len(pods.Items))
+			}
+			
+			// Always show secrets (even in stealth mode)
+			secrets, err := clientset.CoreV1().Secrets(ns.Name).List(ctx, metav1.ListOptions{})
+			if err == nil && len(secrets.Items) > 0 {
+				fmt.Printf("     🔐 Secrets: %d\n", len(secrets.Items))
+				for _, secret := range secrets.Items {
+					secretType := string(secret.Type)
+					dataCount := len(secret.Data)
+					fmt.Printf("       🔴 Secret %s/%s (%s) - %d keys\n", secret.Namespace, secret.Name, secretType, dataCount)
+				}
+			}
+			
+			// Always show DaemonSets (even in stealth mode)
+			daemonsets, err := clientset.AppsV1().DaemonSets(ns.Name).List(ctx, metav1.ListOptions{})
+			if err == nil && len(daemonsets.Items) > 0 {
+				fmt.Printf("     🎯 DaemonSets: %d\n", len(daemonsets.Items))
+				for _, ds := range daemonsets.Items {
+					desired := ds.Status.DesiredNumberScheduled
+					ready := ds.Status.NumberReady
+					fmt.Printf("       • %s (desired: %d, ready: %d)\n", ds.Name, desired, ready)
+				}
+			}
+			
+			if !stealth {
+				// Detailed pod analysis (security checks)
 
 				// Security checks for pods
 				for _, pod := range pods.Items {
@@ -328,25 +356,18 @@ func K8sRecon(ctx context.Context, kubeconfigPath string, stealth bool, showRBAC
 					}
 				}
 
-				// List secrets in namespace
-				secrets, err := clientset.CoreV1().Secrets(ns.Name).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					fmt.Printf("     ❌ Failed to list secrets: %v\n", err)
-				} else if len(secrets.Items) > 0 {
-					fmt.Printf("     Secrets: %d\n", len(secrets.Items))
+				// Detailed secret analysis (already listed above, but show sensitive details)
+				if len(secrets.Items) > 0 {
 					for _, secret := range secrets.Items {
 						secretType := string(secret.Type)
-						dataCount := len(secret.Data)
-						fmt.Printf("       🔴 Secret %s/%s (%s) - %d keys\n", secret.Namespace, secret.Name, secretType, dataCount)
-
 						// Check for sensitive secret types
 						switch secretType {
 						case "kubernetes.io/service-account-token":
-							fmt.Printf("         ⚠️  ServiceAccount token found!\n")
+							fmt.Printf("         ⚠️  Secret %s/%s: ServiceAccount token found!\n", secret.Namespace, secret.Name)
 						case "kubernetes.io/dockerconfigjson":
-							fmt.Printf("         ⚠️  Docker registry credentials found!\n")
+							fmt.Printf("         ⚠️  Secret %s/%s: Docker registry credentials found!\n", secret.Namespace, secret.Name)
 						case "kubernetes.io/tls":
-							fmt.Printf("         ⚠️  TLS certificate found!\n")
+							fmt.Printf("         ⚠️  Secret %s/%s: TLS certificate found!\n", secret.Namespace, secret.Name)
 						}
 					}
 				}
@@ -378,6 +399,8 @@ func K8sRecon(ctx context.Context, kubeconfigPath string, stealth bool, showRBAC
 						fmt.Printf("       • %s (replicas: %d, ready: %d)\n", dep.Name, replicas, ready)
 					}
 				}
+
+				// DaemonSets already listed above (always shown)
 
 				// ➕ List jobs in namespace
 				jobs, err := clientset.BatchV1().Jobs(ns.Name).List(ctx, metav1.ListOptions{})

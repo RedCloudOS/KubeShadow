@@ -32,9 +32,8 @@ var (
 )
 
 func init() {
-	AuditBypassCmd.Flags().StringVar(&auditBypassKubeConfig, "kubeconfig", "", "Path to the kubeconfig file (required)")
+	AuditBypassCmd.Flags().StringVar(&auditBypassKubeConfig, "kubeconfig", "~/.kube/config", "Path to the kubeconfig file (default: ~/.kube/config)")
 	AuditBypassCmd.Flags().StringVar(&auditPolicyPath, "audit-policy", "", "Path to the audit policy file to analyze")
-	AuditBypassCmd.MarkFlagRequired("kubeconfig")
 }
 
 type AuditPolicyRule struct {
@@ -48,6 +47,17 @@ type AuditPolicyRule struct {
 }
 
 func loadKubeClient(kubeconfig string) (*kubernetes.Clientset, *rest.Config, error) {
+	// Expand ~ to home directory if present
+	if kubeconfig == "~/.kube/config" || strings.HasPrefix(kubeconfig, "~/") {
+		home := os.Getenv("HOME")
+		if home == "" {
+			home = os.Getenv("USERPROFILE") // Windows
+		}
+		if home != "" {
+			kubeconfig = strings.Replace(kubeconfig, "~", home, 1)
+		}
+	}
+	
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, nil, err

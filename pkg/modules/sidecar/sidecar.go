@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -167,9 +168,18 @@ func (m *SidecarModule) Execute(ctx context.Context) error {
 		return errors.New(errors.ErrK8s, fmt.Sprintf("failed to get pod %s", m.pod), err)
 	}
 
+	// Check if sidecar already exists
+	sidecarName := "kubeshadow-sidecar"
+	for _, container := range pod.Spec.Containers {
+		if container.Name == sidecarName {
+			logger.Info("Sidecar %s already exists in pod %s", sidecarName, m.pod)
+			return nil
+		}
+	}
+
 	// Create sidecar container
 	sidecar := corev1.Container{
-		Name:            "kubeshadow-sidecar",
+		Name:            sidecarName,
 		Image:           config.Image,
 		Command:         config.Command,
 		Args:            config.Args,
@@ -178,13 +188,38 @@ func (m *SidecarModule) Execute(ctx context.Context) error {
 		SecurityContext: config.SecurityContext,
 	}
 
-	// Add sidecar to pod
-	pod.Spec.Containers = append(pod.Spec.Containers, sidecar)
+	// Create patch payload with new container
+	patchPod := corev1.Pod{
+		Spec: corev1.PodSpec{
+			Containers: append(pod.Spec.Containers, sidecar),
+		},
+	}
 
-	// Update pod
-	_, err = m.clientset.CoreV1().Pods(m.namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	// Serialize to JSON for patch
+	patchData, err := json.Marshal(patchPod)
 	if err != nil {
-		return errors.New(errors.ErrK8s, "failed to update pod with sidecar", err)
+		return errors.New(errors.ErrK8s, "failed to marshal patch data", err)
+	}
+
+	// Use strategic merge patch to add sidecar
+	// Note: Kubernetes doesn't allow adding containers to running pods via Update(),
+	// but we can try a strategic merge patch. If this fails, we'll suggest ephemeral containers.
+	_, err = m.clientset.CoreV1().Pods(m.namespace).Patch(
+		ctx,
+		m.pod,
+		types.StrategicMergePatchType,
+		patchData,
+		metav1.PatchOptions{},
+	)
+
+	if err != nil {
+		// If patch fails, Kubernetes doesn't allow adding containers to running pods
+		logger.Error("Failed to inject sidecar container: %v", err)
+		logger.Info("Note: Kubernetes doesn't allow adding containers to running pods.")
+		logger.Info("Consider using ephemeral containers instead:")
+		logger.Info("  kubeshadow exploitation ephemeral --action inject --target-pod %s --namespace %s --image %s --privileged",
+			m.pod, m.namespace, config.Image)
+		return errors.New(errors.ErrK8s, "failed to inject sidecar: Kubernetes doesn't allow adding containers to running pods. Use ephemeral containers instead", err)
 	}
 
 	logger.Info("Successfully injected sidecar into pod %s", m.pod)

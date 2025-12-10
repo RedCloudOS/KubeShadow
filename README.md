@@ -439,6 +439,16 @@ The lab integrates seamlessly with the KubeShadow dashboard:
 # Export findings as CSV or PDF
 ```
 
+**⚠️ Important: Remote Access Setup**
+
+To access the dashboard from anywhere via the VM's public IP, you **MUST** open port 8080 in your cloud provider's firewall:
+
+- **AWS**: Add inbound rule to EC2 Security Group (TCP port 8080)
+- **GCP**: Create firewall rule allowing TCP port 8080
+- **Azure**: Add inbound security rule to Network Security Group (TCP port 8080)
+
+See [Dashboard README](modules/dashboard/README.md) for detailed firewall configuration instructions.
+
 For detailed lab documentation, see [modules/lab/README.md](modules/lab/README.md).
 
 ## Common Usage Patterns

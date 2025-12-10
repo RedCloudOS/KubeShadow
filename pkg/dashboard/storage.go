@@ -18,10 +18,11 @@ type Storage struct {
 
 // NewStorage creates a new storage instance with SQLite database
 // Returns error if CGO is disabled (sqlite3 requires CGO)
+// This is expected and handled gracefully - dashboard works in in-memory mode
 func NewStorage(dbPath string) (*Storage, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		// Check if it's a CGO error
+		// Check if it's a CGO error - return a clean error message
 		errStr := err.Error()
 		if errStr == "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub" ||
 			errStr == "sql: unknown driver \"sqlite3\" (forgotten import?)" {
@@ -32,6 +33,11 @@ func NewStorage(dbPath string) (*Storage, error) {
 
 	storage := &Storage{db: db}
 	if err := storage.initTables(); err != nil {
+		// Check if initTables failed due to CGO
+		errStr := err.Error()
+		if errStr == "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub" {
+			return nil, fmt.Errorf("CGO is disabled: go-sqlite3 requires CGO. Build with CGO_ENABLED=1 or use in-memory mode")
+		}
 		return nil, fmt.Errorf("failed to initialize tables: %w", err)
 	}
 
@@ -107,6 +113,11 @@ func (s *Storage) initTables() error {
 	
 	for _, table := range tables {
 		if _, err := s.db.Exec(table); err != nil {
+			// Check if it's a CGO error
+			errStr := err.Error()
+			if errStr == "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub" {
+				return fmt.Errorf("CGO is disabled: go-sqlite3 requires CGO. Build with CGO_ENABLED=1 or use in-memory mode")
+			}
 			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}

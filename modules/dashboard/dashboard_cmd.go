@@ -87,22 +87,7 @@ var DashboardCmd = &cobra.Command{
 			return fmt.Errorf("failed to start dashboard: %w", err)
 		}
 
-		// Get network IPs for display
-		ips := getNetworkIPs()
-		fmt.Printf("🎯 KubeShadow Dashboard started on http://localhost:%d\n", port)
-		if len(ips) > 0 {
-			fmt.Println("🌐 Accessible from network:")
-			for _, ip := range ips {
-				fmt.Printf("   http://%s:%d\n", ip, port)
-			}
-		}
-		
-		// Show SSH port forwarding instructions for remote access
-		fmt.Println("\n📡 For SSH/Remote Access:")
-		fmt.Printf("   Local port forward: ssh -L %d:localhost:%d user@host\n", port, port)
-		fmt.Println("   Then access: http://localhost:" + fmt.Sprintf("%d", port))
-		fmt.Println("   Or use GCP Console port forwarding feature")
-		
+		// IP addresses and access info are already displayed by dashboard.Start()
 		fmt.Println("\n📊 Use the --dashboard flag with other commands to publish results here")
 		
 		if background {

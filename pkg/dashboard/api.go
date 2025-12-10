@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -132,24 +133,45 @@ func (api *APIHandler) handleCommandResults(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Store the command result
-	err := api.storage.StoreCommandResult(commandID, request.Output, request.ErrorMsg, request.Findings, request.Summary)
-	if err != nil {
-		log.Printf("Error storing command result: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Get the command to process with graph builder
-	command, err := api.storage.GetCommand(commandID)
-	if err != nil {
-		log.Printf("Error getting command for graph processing: %v", err)
-	} else {
-		// Process with graph builder
-		go func() {
-			if err := api.graphBuilder.ProcessCommandResult(command, request.Findings, request.Summary); err != nil {
-				log.Printf("Error processing command result with graph builder: %v", err)
+	if api.storage != nil {
+		err := api.storage.StoreCommandResult(commandID, request.Output, request.ErrorMsg, request.Findings, request.Summary)
+		if err != nil {
+			// Only log non-CGO errors (actual database problems)
+			// CGO errors are expected and handled silently
+			errStr := err.Error()
+			if !strings.Contains(errStr, "CGO_ENABLED=0") && 
+			   !strings.Contains(errStr, "sqlite3") &&
+			   !strings.Contains(errStr, "CGO is disabled") {
+				log.Printf("Error storing command result: %v", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
 			}
-		}()
+		}
+
+		// Get the command to process with graph builder
+		command, err := api.storage.GetCommand(commandID)
+		if err != nil {
+			// Only log non-CGO errors
+			errStr := err.Error()
+			if !strings.Contains(errStr, "CGO_ENABLED=0") && 
+			   !strings.Contains(errStr, "sqlite3") &&
+			   !strings.Contains(errStr, "CGO is disabled") {
+				log.Printf("Error getting command for graph processing: %v", err)
+			}
+		} else {
+			// Process with graph builder
+			go func() {
+				if err := api.graphBuilder.ProcessCommandResult(command, request.Findings, request.Summary); err != nil {
+					// Only log non-CGO errors
+					errStr := err.Error()
+					if !strings.Contains(errStr, "CGO_ENABLED=0") && 
+					   !strings.Contains(errStr, "sqlite3") &&
+					   !strings.Contains(errStr, "CGO is disabled") {
+						log.Printf("Error processing command result with graph builder: %v", err)
+					}
+				}
+			}()
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

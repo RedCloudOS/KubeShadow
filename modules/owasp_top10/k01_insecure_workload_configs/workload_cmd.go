@@ -14,8 +14,8 @@ import (
 
 // WorkloadConfigCmd represents the workload config command
 var WorkloadConfigCmd = &cobra.Command{
-	Use:   "workload-config",
-	Short: "Scan workloads for insecure security configurations",
+	Use:   "k01",
+	Short: "K01 - Insecure Workload Configurations",
 	Long: `K01 - Insecure Workload Configurations
 
 This command scans all workloads (Pods, Deployments, StatefulSets, DaemonSets) 
@@ -34,13 +34,13 @@ Features:
   (PSA/OPA policy snippet)
 
 Examples:
-  kubeshadow workload-config
-  kubeshadow workload-config --output ./findings.json
-  kubeshadow workload-config --lab --simulate
-  kubeshadow workload-config --kubeconfig ~/.kube/config
-  kubeshadow workload-config --namespace kube-system
-  kubeshadow workload-config --severity critical,high
-  kubeshadow workload-config --remediation-only`,
+  kubeshadow owasp k01
+  kubeshadow owasp k01 --output ./findings.json
+  kubeshadow owasp k01 --lab --simulate
+  kubeshadow owasp k01 --kubeconfig ~/.kube/config
+  kubeshadow owasp k01 --namespace kube-system
+  kubeshadow owasp k01 --severity critical,high
+  kubeshadow owasp k01 --remediation-only`,
 	RunE: runWorkloadConfig,
 }
 

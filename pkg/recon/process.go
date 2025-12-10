@@ -79,10 +79,16 @@ func GetProcessInfo(ctx context.Context) ([]ProcessInfo, error) {
 			continue
 		}
 
-		// Get process details
+		// Get process details - skip processes we can't access (permission denied is expected)
 		process, err := getProcessDetails(pid)
 		if err != nil {
-			logger.Warn("Failed to get details for process %d: %v", pid, err)
+			// Only log if it's not a permission error (permission denied is normal)
+			errStr := err.Error()
+			if !strings.Contains(errStr, "permission denied") && 
+			   !strings.Contains(errStr, "Permission denied") &&
+			   !strings.Contains(errStr, "operation not permitted") {
+				logger.Warn("Failed to get details for process %d: %v", pid, err)
+			}
 			continue
 		}
 
@@ -254,33 +260,61 @@ func getProcessDetails(pid int) (ProcessInfo, error) {
 	// Calculate uptime
 	process.Uptime = time.Since(startTime)
 
-	// Get working directory
+	// Get working directory (optional - permission denied is expected for some processes)
 	workingDir, err := getWorkingDir(pid)
 	if err != nil {
-		return process, fmt.Errorf("failed to get working directory: %v", err)
+		// Permission denied is normal, just skip it
+		if !strings.Contains(err.Error(), "permission denied") && 
+		   !strings.Contains(err.Error(), "Permission denied") &&
+		   !strings.Contains(err.Error(), "operation not permitted") {
+			return process, fmt.Errorf("failed to get working directory: %v", err)
+		}
+		process.WorkingDir = "" // Empty if we can't read it
+	} else {
+		process.WorkingDir = workingDir
 	}
-	process.WorkingDir = workingDir
 
-	// Get environment variables
+	// Get environment variables (optional - permission denied is expected)
 	env, err := getEnvironment(pid)
 	if err != nil {
-		return process, fmt.Errorf("failed to get environment variables: %v", err)
+		// Permission denied is normal, just skip it
+		if !strings.Contains(err.Error(), "permission denied") && 
+		   !strings.Contains(err.Error(), "Permission denied") &&
+		   !strings.Contains(err.Error(), "operation not permitted") {
+			return process, fmt.Errorf("failed to get environment variables: %v", err)
+		}
+		process.Environment = []string{} // Empty if we can't read it
+	} else {
+		process.Environment = env
 	}
-	process.Environment = env
 
-	// Get capabilities
+	// Get capabilities (optional - permission denied is expected)
 	capabilities, err := getCapabilities(pid)
 	if err != nil {
-		return process, fmt.Errorf("failed to get capabilities: %v", err)
+		// Permission denied is normal, just skip it
+		if !strings.Contains(err.Error(), "permission denied") && 
+		   !strings.Contains(err.Error(), "Permission denied") &&
+		   !strings.Contains(err.Error(), "operation not permitted") {
+			return process, fmt.Errorf("failed to get capabilities: %v", err)
+		}
+		process.Capabilities = []string{} // Empty if we can't read it
+	} else {
+		process.Capabilities = capabilities
 	}
-	process.Capabilities = capabilities
 
-	// Get resource limits
+	// Get resource limits (optional - permission denied is expected)
 	limits, err := getResourceLimits(pid)
 	if err != nil {
-		return process, fmt.Errorf("failed to get resource limits: %v", err)
+		// Permission denied is normal, just skip it
+		if !strings.Contains(err.Error(), "permission denied") && 
+		   !strings.Contains(err.Error(), "Permission denied") &&
+		   !strings.Contains(err.Error(), "operation not permitted") {
+			return process, fmt.Errorf("failed to get resource limits: %v", err)
+		}
+		process.Limits = ProcessLimits{} // Empty if we can't read it
+	} else {
+		process.Limits = limits
 	}
-	process.Limits = limits
 
 	return process, nil
 }

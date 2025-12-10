@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,8 +54,22 @@ func GetInstance() *Dashboard {
 		// Initialize storage
 		storage, err := NewStorage("kubeshadow.db")
 		if err != nil {
-			log.Printf("Warning: Failed to initialize storage, using in-memory mode: %v", err)
-			storage = nil
+			// Check if it's a CGO error - this is expected and fine, fail silently
+			errStr := err.Error()
+			if errStr == "Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub" ||
+				errStr == "sql: unknown driver \"sqlite3\" (forgotten import?)" ||
+				errStr == "CGO is disabled: go-sqlite3 requires CGO. Build with CGO_ENABLED=1 or use in-memory mode" ||
+				strings.Contains(errStr, "CGO_ENABLED=0") ||
+				strings.Contains(errStr, "sqlite3") {
+				// Silent fallback to in-memory mode - this is expected behavior
+				// No warning needed - dashboard works fine in in-memory mode
+				storage = nil
+			} else {
+				// Only log non-CGO errors (actual database problems)
+				// These are rare and worth logging
+				log.Printf("⚠️  Storage unavailable, using in-memory mode: %v", err)
+				storage = nil
+			}
 		}
 
 		// Initialize components
@@ -141,10 +157,39 @@ func (d *Dashboard) Start(port int) error {
 	// Get all network IP addresses
 	ips := d.getNetworkIPs(port)
 	
+	// Get public IP address
+	publicIP := d.getPublicIP()
+	
 	log.Printf("🎯 Dashboard starting on http://localhost:%d", port)
-	for _, ip := range ips {
-		log.Printf("🌐 Accessible at: http://%s:%d", ip, port)
+	log.Println("")
+	log.Println("═══════════════════════════════════════════════════════════")
+	log.Println("🌐 DASHBOARD ACCESSIBLE FROM ANYWHERE")
+	log.Println("═══════════════════════════════════════════════════════════")
+	
+	// Show public IP first if available
+	if publicIP != "" {
+		log.Printf("🌍 VM PUBLIC IP: http://%s:%d", publicIP, port)
+		log.Printf("   ↳ This is your VM's public IP - accessible from anywhere on the internet")
+		log.Printf("   ↳ Share this URL to allow remote access to the dashboard")
+		log.Println("")
+	} else {
+		log.Println("⚠️  Could not detect VM public IP (may be behind NAT/firewall)")
+		log.Println("   ↳ Dashboard is still accessible via local network IPs shown below")
+		log.Println("")
 	}
+	
+	// Show local network IPs
+	if len(ips) > 0 {
+		log.Println("📡 LOCAL NETWORK IPs:")
+		for _, ip := range ips {
+			log.Printf("   • http://%s:%d", ip, port)
+		}
+		log.Println("")
+	}
+	
+	log.Printf("💻 LOCAL ACCESS: http://localhost:%d", port)
+	log.Println("═══════════════════════════════════════════════════════════")
+	log.Println("")
 
 	go func() {
 		if err := d.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -211,6 +256,47 @@ func (d *Dashboard) getNetworkIPs(port int) []string {
 	return uniqueIPs
 }
 
+// getPublicIP attempts to get the public IP address of the machine
+func (d *Dashboard) getPublicIP() string {
+	// List of public IP services to try
+	services := []string{
+		"https://api.ipify.org",
+		"https://ifconfig.me/ip",
+		"https://icanhazip.com",
+		"https://checkip.amazonaws.com",
+		"https://ipinfo.io/ip",
+	}
+	
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+	}
+	
+	// Try each service until one works
+	for _, service := range services {
+		resp, err := client.Get(service)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode == http.StatusOK {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				continue
+			}
+			
+			ip := strings.TrimSpace(string(body))
+			// Validate it's a valid IP address
+			if net.ParseIP(ip) != nil {
+				return ip
+			}
+		}
+	}
+	
+	// If all services fail, return empty string
+	return ""
+}
+
 // Stop stops the dashboard web server
 func (d *Dashboard) Stop() error {
 	if !d.enabled {
@@ -258,7 +344,14 @@ func (d *Dashboard) PublishResult(result CommandResult) {
 	if d.features.CommandStorage && d.storage != nil {
 		go func() {
 			if err := d.storage.StoreCommand(&result); err != nil {
-				log.Printf("Error storing command in database: %v", err)
+				// Only log non-CGO errors (actual database problems)
+				// CGO errors are expected and handled silently
+				errStr := err.Error()
+				if !strings.Contains(errStr, "CGO_ENABLED=0") && 
+				   !strings.Contains(errStr, "sqlite3") &&
+				   !strings.Contains(errStr, "CGO is disabled") {
+					log.Printf("Error storing command in database: %v", err)
+				}
 			}
 		}()
 	}
@@ -305,15 +398,28 @@ func (d *Dashboard) PublishCommandResult(commandID string, output, errorMsg stri
 	if d.features.CommandStorage && d.storage != nil {
 		go func() {
 			if err := d.storage.StoreCommandResult(commandID, output, errorMsg, findings, summary); err != nil {
-				log.Printf("Error storing command result: %v", err)
+				// Only log non-CGO errors (actual database problems)
+				// CGO errors are expected and handled silently
+				errStr := err.Error()
+				if !strings.Contains(errStr, "CGO_ENABLED=0") && 
+				   !strings.Contains(errStr, "sqlite3") &&
+				   !strings.Contains(errStr, "CGO is disabled") {
+					log.Printf("Error storing command result: %v", err)
+				}
 			}
 
 			// Process with graph builder
-			if d.features.GraphBuilder {
+			if d.features.GraphBuilder && d.storage != nil {
 				command, err := d.storage.GetCommand(commandID)
 				if err == nil {
 					if err := d.graphBuilder.ProcessCommandResult(command, findings, summary); err != nil {
-						log.Printf("Error processing command result with graph builder: %v", err)
+						// Only log non-CGO errors
+						errStr := err.Error()
+						if !strings.Contains(errStr, "CGO_ENABLED=0") && 
+						   !strings.Contains(errStr, "sqlite3") &&
+						   !strings.Contains(errStr, "CGO is disabled") {
+							log.Printf("Error processing command result with graph builder: %v", err)
+						}
 					}
 				}
 			}
