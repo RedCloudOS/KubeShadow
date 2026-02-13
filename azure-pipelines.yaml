@@ -38,8 +38,6 @@ stages:
 
         go mod tidy
         go mod download
-
-        mv build/kubeshadow kubeshadow
       workingDirectory: '$(system.defaultWorkingDirectory)'
       displayName: 'Get deps and build KubeShadow'
 
