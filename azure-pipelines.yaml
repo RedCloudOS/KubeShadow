@@ -34,10 +34,15 @@ stages:
 
     - script: |
         set -euxo pipefail
+        go version
 
-        make build-cgo
+        go mod tidy
+        go mod download
+
+        # build it
+        go build -o kubeshadow ./...
       workingDirectory: '$(system.defaultWorkingDirectory)'
-      displayName: 'Get dependencies and build KubeShadow'
+      displayName: 'Get deps and build KubeShadow'
 
     - script: |
         set -euo pipefail
