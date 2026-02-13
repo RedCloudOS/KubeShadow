@@ -1,0 +1,99 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  PKG_NAME: KubeShadow
+  DEB_VERSION: 0.0.0~rolling
+  DIST: redcloud
+  COMPONENT: main
+  GOBIN:  '$(system.defaultWorkingDirectory)/bin'
+
+stages:
+- stage: Build
+  displayName: Build & Package Debian
+  jobs:
+  - job: Debian
+    displayName: Build Debian Package
+    strategy:
+      matrix:
+        amd64:
+          GOARCH: amd64
+
+    steps:
+    - checkout: self
+
+    - script: |
+        mkdir -p '$(GOBIN)'
+        echo '##vso[task.prependpath]$(GOBIN)'
+      displayName: 'Set up the Go workspace'
+
+    - script: |
+        set -euxo pipefail
+
+        make build-cgo
+      workingDirectory: '$(system.defaultWorkingDirectory)'
+      displayName: 'Get dependencies and build KubeShadow'
+
+    - script: |
+        set -euo pipefail
+
+        mkdir -p pkg/DEBIAN
+        mkdir -p pkg/usr/bin
+
+        cp KubeShadow pkg/usr/bin/KubeShadow
+        chmod 0755 pkg/usr/bin/KubeShadow
+
+        cat <<EOF > pkg/DEBIAN/control
+        Package: $(PKG_NAME)
+        Version: $(DEB_VERSION)
+        Section: utils
+        Priority: optional
+        Architecture: amd64
+        Maintainer: RedCloud Team <redcloud@cyberwarfare.live>
+        Description: KubeShadow is a comprehensive Kubernetes security testing and exploitation toolkit designed for red team operations, security assessments, and penetration testing. 
+        EOF
+
+        dpkg-deb --build pkg \
+          $(PKG_NAME)_$(DEB_VERSION)_amd64.deb
+      displayName: Create Debian Package
+
+    - script: |
+        set -euo pipefail
+
+        mkdir -p repo/pool/$(COMPONENT)
+        mkdir -p repo/dists/$(DIST)/$(COMPONENT)/binary-amd64
+
+        mv $(PKG_NAME)_*.deb repo/pool/$(COMPONENT)/
+
+        cd repo
+        dpkg-scanpackages pool /dev/null \
+          > dists/$(DIST)/$(COMPONENT)/binary-amd64/Packages
+
+        gzip -kf dists/$(DIST)/$(COMPONENT)/binary-amd64/Packages
+
+        cat <<EOF > dists/$(DIST)/Release
+        Origin: KubeShadow
+        Label: KubeShadow
+        Suite: $(DIST)
+        Codename: $(DIST)
+        Architectures: amd64
+        Components: $(COMPONENT)
+        Description: KubeShadow APT Repository
+        EOF
+      displayName: Prepare APT Repository Metadata
+      condition: ne(variables['Build.Reason'], 'PullRequest')
+
+    - task: CopyFilesOverSSH@0
+      displayName: Upload APT Repo
+      inputs:
+        sshEndpoint: Prod-APT-Repo-VM
+        sourceFolder: '$(system.defaultWorkingDirectory)/repo'
+        contents: '**'
+        targetFolder: '/opt/apt-repo'
+        overwrite: false
+        cleanTargetFolder: false
